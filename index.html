@@ -78,7 +78,7 @@
     }
     
     function series(strs, conjunction) {
-      conjunction = conjunction | 'and';
+      conjunction = conjunction || 'and';
       if (strs.length < 3) return strs.join(' ' + conjunction + ' ');
       return strs.slice(0, -1).join(', ') + ', ' + conjunction + ' ' + strs[strs.length - 1];
     }
@@ -304,17 +304,31 @@
     var you = new You();
     
     // PLACES
+    
     var room = new Place("room");
     room.description = 'You are standing in a room with four walls, no furniture, and no windows.';
     
     var closet = new Place("closet");
     closet.description = 'You are standing inside of a closet. It is dim in here.';
     
+    var tunnel = new Place("underground tunnel");
+    tunnel.description = 'You find yourself in an underground tunnel that you can stand in and walk. '+
+        'The walls of the tunnel are made out of stone.';
+    
+    var pit = new Place("pit");
+    pit.description = 'You are now at the bottom of a pit.  This pit is very deep.  The walls of the pit are also made of stone.';
+    
+    var bedroom = new Place("bedroom");
+    bedroom.description = 'This room is big, with a huge bed covered in pink blankets.';
+    
     you.location = room;
     
     // EXITS
-    room.exits = { 'north': closet };
-    closet.exits = { 'south': room };
+    room.exits = { 'north': closet, 'south':bedroom };
+    bedroom.exits = {'north': room };
+    closet.exits = { 'south': room, 'east': tunnel };
+    tunnel.exits = { 'west': closet, 'east': pit };
+    pit.exits = { 'up': tunnel };
     
     // ITEMS
     
@@ -347,6 +361,35 @@
       return "You eat the soup.  Yum, tasty room-temperature soup!";
     };
     
+    var note = new Item("note");
+    note.location = pit;
+    note.describe = function() {
+       if (note.location !== you) {
+         return "It appears to have some writing on it, but you can't read it if you don't have it.";
+       }
+       return "The note reads:\n\n"+
+        "\"Dear Mom,\n\nPlease do not eat the yummy NASS-TEE Split Pea Soup. I am saving it for dinner.\n"+
+        "Love,\nElla.\"";
+    }
+    
+    var bed = new Item("bed");
+    bed.location = bedroom;
+    bed.describe = function() {
+       //TODO find better way to hide stuff than this
+       var ret = 'The bed is huge with a purple blanket and pink pillows.';
+       if (teddyBear.location === bed) {teddyBear.location = bed.location; teddyBear.known = true;}
+       if (teddyBear.location === bed.location) {ret += ' There is a teddy bear on the bed.';}    
+       return ret;
+        };
+    bed.canBeTaken = false;
+    bed.beUsed = function() {
+        return "You lie down on the bed and fall asleep for a few minutes.  You wake up feeling refreshed.";
+    }
+    
+    var teddyBear = new Item("teddy bear");
+    teddyBear.keywords = ['teddy bear','teddybear','teddy','bear'];
+    teddyBear.location = bed;
+    
     function help() {
       var ret = '';
       ret += 'Need help?  Here are some commands:\n';
@@ -371,7 +414,7 @@
     
       var s = str.toLowerCase().replace(/[^a-z0-9 ]/g, '');
       s = s.replace(/\s+/g, ' ').trim();
-      s = s.replace(/\bplease( |$)/, ''); // no need to be polite
+      s = s.replace(/\bplease( |$)/, ''); // no need to be polite TODO end with please
     
     
       var m;
