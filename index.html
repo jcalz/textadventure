@@ -1,424 +1,435 @@
 <html>
-  <head>
-    <meta http-equiv="Content-Type" content="text/html; charset=ascii">
-    <title>Text Adventure</title>
-    <link href="https://fonts.googleapis.com/css?family=VT323" rel="stylesheet">
-    <script
-      src="https://code.jquery.com/jquery-3.1.1.js"
-      integrity="sha256-16cdPddA6VdVInumRGo6IbivbERE8p7CQR3HzTBuELA="
-      crossorigin="anonymous"></script>
-    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js" integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa" crossorigin="anonymous"></script>
-    <style>
-      html * {
+
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=ascii">
+  <title>Text Adventure</title>
+  <link href="https://fonts.googleapis.com/css?family=VT323" rel="stylesheet">
+  <script src="https://code.jquery.com/jquery-3.1.1.js" integrity="sha256-16cdPddA6VdVInumRGo6IbivbERE8p7CQR3HzTBuELA=" crossorigin="anonymous"></script>
+  <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js" integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa"
+  crossorigin="anonymous"></script>
+  <style>
+    html * {
       font-family: 'VT323', monospace;
+      font-variant-ligatures: none;
       padding: 0;
       margin: 0;
-      }
-      #adventure-window {
-      width: 90%
-      height: 90%;
+    }
+    #adventure-window {
+      width: 90% height: 90%;
       border: 5px solid #0f0;
       padding: 5px;
       color: #0f0;
       background-color: black;
       font-size: 1.5em;
-      }
-      .output-span {
+    }
+    .output-span {
       color: #ff0;
-      }
-      .bottom-container {
+    }
+    .bottom-container {
       position: relative;
       width: 100%;
       height: 85%;
-      overflow: hidden;
-      }
-      #output {
+      overflow-y: hidden;
+    }
+    #output {
       position: absolute;
       bottom: 0px;
       white-space: pre-wrap;
-      }
-      #input {
+    }
+    #input {
       border: none;
       color: #0f0;
       background-color: black;
       font-size: 1em;
       flex-grow: 100;
-      }
-      #adventure-form {
+    }
+    #adventure-form {
       display: flex;
-      }
-      .prompt {		
+    }
+    .prompt {
       float: left;
-      }
-    </style>
-  </head>
-  <body>
-    <div>
-      <h1>Text Adventure Game</h1>
-      <div id="adventure-window">
-        <div class="bottom-container">
-          <div id="output"></div>
-        </div>
-        <form autocomplete="off" id="adventure-form" onsubmit="processInput(); return false;"><label class="prompt" for="input">&gt;&gt;&nbsp;</label><input type="text" id="input"></form>
+    }
+  </style>
+</head>
+
+<body>
+  <div>
+    <h1>Text Adventure Game</h1>
+    <div id="adventure-window">
+      <div class="bottom-container">
+        <div id="output"></div>
       </div>
+      <form autocomplete="off" id="adventure-form" onsubmit="processInput(); return false;">
+        <label class="prompt" for="input">&gt;&gt;&nbsp;</label>
+        <input type="text" id="input">
+      </form>
     </div>
-  </body>
-  <script>
-    "use strict";
-    
-    // helper objects and functions 
-    function titleCase(str) {
-      return str.toLowerCase().split(" ").map(function (v) {
-        return v.charAt(0).toUpperCase() + v.slice(1);
-      }).join(" ");
-    }
-    
-    function capitalize(str) {
-      return str.charAt(0).toUpperCase() + str.slice(1);
-    }
-    
-    function series(strs, conjunction) {
-      conjunction = conjunction || 'and';
-      if (strs.length < 3) return strs.join(' ' + conjunction + ' ');
-      return strs.slice(0, -1).join(', ') + ', ' + conjunction + ' ' + strs[strs.length - 1];
-    }
-    
-    var vowelset = { "a": true, "e": true, "i": true, "o": true, "u": true };
-    var directions = {
-      north: ['n'],
-      south: ['s'],
-      east: ['e'],
-      west: ['w'],
-      northeast: ['ne'],
-      southeast: ['se'],
-      northwest: ['nw'],
-      southwest: ['sw'],
-      up: ['u'],
-      down: ['d'] };
-    
-    var dirs = {};
-    Object.keys(directions).forEach(function (k) {
-      dirs[k] = k;
-      directions[k].forEach(function (v) {
-        dirs[v] = k;
-      });
+  </div>
+</body>
+<script>
+  "use strict";
+  //TODO scroll history
+  //TODO climb = "go up" ?
+  //TODO FUTURE "you" should be more general
+  //TODO state storage
+  //TODO "read" command
+  //TODO flesh out exits: description, hidden, etc
+  //TODO parse multiple objects
+  //TODO "put ___ in/on ____"
+  //TODO "use ___ with _____"
+  //TODO items: visible,hidden,already described in the room, etc.
+  //TODO default bidirectional exits.
+  //TODO limit to inventory?
+  //TODO generic command functions
+  
+  // helper objects and functions 
+  function titleCase(str) {
+    return str.toLowerCase().split(" ").map(function(v) {
+      return v.charAt(0).toUpperCase() + v.slice(1);
+    }).join(" ");
+  }
+
+  function capitalize(str) {
+    return str.charAt(0).toUpperCase() + str.slice(1);
+  }
+
+  function series(strs, conjunction) {
+    conjunction = conjunction || 'and';
+    if (strs.length < 3) return strs.join(' ' + conjunction + ' ');
+    return strs.slice(0, -1).join(', ') + ', ' + conjunction + ' ' + strs[
+      strs.length - 1];
+  }
+  var vowelset = {
+    "a": true,
+    "e": true,
+    "i": true,
+    "o": true,
+    "u": true
+  };
+  var directions = {
+    north: ['n'],
+    south: ['s'],
+    east: ['e'],
+    west: ['w'],
+    northeast: ['ne'],
+    southeast: ['se'],
+    northwest: ['nw'],
+    southwest: ['sw'],
+    up: ['u'],
+    down: ['d']
+  };
+  var dirs = {};
+  Object.keys(directions).forEach(function(k) {
+    dirs[k] = k;
+    directions[k].forEach(function(v) {
+      dirs[v] = k;
     });
-    
-    // WORLD, GLOBAL VARIABLE
-    var world = function () {
-      var itemMap = {};
-      return {
-        add: function add(item) {
-          var id = item.name.toLowerCase().replace(/[^a-z0-9_ ]/g, '').trim().replace(/\s+/g, '_');
-          var cnt = 0;
-          while (id in itemMap) {
-            id = id + "" + cnt;
-            cnt++;
-          }
-          itemMap[id] = item;
-          item.id = id;
-        },
-        get items() {
-          return Object.values(itemMap);
-        },
-        get itemMap() {
-          return itemMap;
+  });
+  // WORLD, GLOBAL VARIABLE
+  var world = function() {
+    var itemMap = {};
+    return {
+      add: function add(item) {
+        var id = item.name.toLowerCase().replace(/[^a-z0-9_ ]/g, '').trim()
+          .replace(/\s+/g, '_');
+        var cnt = 0;
+        while (id in itemMap) {
+          id = id + "" + cnt;
+          cnt++;
         }
-      };
-    }();
-    
-    function Item(name) {
-    
-      name = name || "item";
-      this.name = name; // base name without definite/indefinite articles, lower case if possible.  try to make it unique.
-      world.add(this);
-    
-      this.location = null; // optional Item representing the location of this item (part of the state)
-      this.description = null; // optional string representing the verbose/examine description of the item.
-      this.keywords = [this.name]; // list of words to identify this item.  try to make them unique.        
-      this.definiteName = 'the ' + this.name; // definite version of the name
-      this.indefiniteName = (this.name.charAt(0).toLowerCase() in vowelset ? "an " : "a ") + this.name;
-    
-      this.canBeTaken = true; // can you pick this up? TODO weight
-    
-      this.beUsed = function () {
-        return "You can't use " + this.definiteName + ".";
-      };
-    
-      this.known = false; // part of the state
-    
-      this.describe = function () {
-        var ret = this.description || 'It\'s just ' + this.indefiniteName + '.';
-        return ret;
-      };
-    
-      // copy the state of this item into a string
-      this.serialize = function () {
-        //TODO			
-      };
-    
-      // restore this item to the state represented by the passed-in string  
-      this.deserialize = function (state) {
-        //TODO
-      };
+        itemMap[id] = item;
+        item.id = id;
+      },
+      get items() {
+        return Object.values(itemMap);
+      },
+      get itemMap() {
+        return itemMap;
+      }
+    };
+  }();
+
+  function Item(name) {
+    name = name || "item";
+    this.name = name; // base name without definite/indefinite articles, lower case if possible.  try to make it unique.
+    world.add(this);
+    this.location = null; // optional Item representing the location of this item (part of the state)
+    this.description = null; // optional string representing the verbose/examine description of the item.
+    this.keywords = [this.name]; // list of words to identify this item.  try to make them unique.        
+    this.definiteName = 'the ' + this.name; // definite version of the name
+    this.indefiniteName = (this.name.charAt(0).toLowerCase() in vowelset ?
+      "an " : "a ") + this.name;
+    this.canBeTaken = true; // can you pick this up? 	  
+    this.beUsed = function() {
+      return "You can't use " + this.definiteName + ".";
+    };
+    this.known = false; // part of the state
+    this.describe = function() {
+      var ret = this.description || 'It\'s just ' + this.indefiniteName +
+        '.';
+      return ret;
+    };
+    // copy the state of this item into a string
+    this.serialize = function() {
+      //TODO			
+    };
+    // restore this item to the state represented by the passed-in string  
+    this.deserialize = function(state) {
+      //TODO
+    };
+  }
+
+  function Place(name) {
+    name = name || "place";
+    Item.call(this, name);
+    this.canBeTaken = false; // by default you can't pick up a place
+    this.exits = {}; // a list of mapping from directions to other Places (uh, directions are strings?)
+    this.describe = function() {
+      var _this = this;
+      var ret = titleCase(this.name) + '\n' + (this.description || '') +
+        ' ';
+      if (this.exits && Object.keys(this.exits).length > 0) {
+        var es = Object.keys(this.exits);
+        ret += 'There ';
+        ret += es.length == 1 ? 'is an exit' : 'are exits';
+        ret += ' leading ';
+        ret += series(es);
+        ret += '.';
+      }
+      var items = world.items.filter(function(it) {
+        return it !== you && it.location === _this;
+      });
+      items.forEach(function(i) {
+        i.known = true;
+      });
+      if (items.length > 0) {
+        ret += ' ' + capitalize(series(items.map(function(x) {
+          return x.indefiniteName;
+        }))) + (items.length > 1 ? ' are' : ' is') + ' here.';
+      }
+      return ret;
+    };
+  }
+
+  function You(name) {
+    name = name || "you";
+    Item.call(this, name);
+    this.indefiniteName = name;
+    this.definiteName = name;
+    this.canBeTaken = false; // by default you can't pick up yourself
+    this.move = function(dir) {
+      if (!this.location || !this.location.exits || !(dir in this.location.exits)) {
+        return "You can't go " + dir + " from here.";
+      }
+      this.location = this.location.exits[dir];
+      return this.look();
+      /*if (this.location.known) {
+        return this.glance();
+      } else {
+        return this.look();
+      }*/
+    };
+    this.look = function() {
+      this.location.known = true;
+      return this.location.describe();
+    };
+    this.glance = function() {
+      return titleCase(this.location.name);
+    };
+    this.canSee = function(item) {
+      return item.location === this.location || item === this.location ||
+        item.location === this;
+    };
+    this.has = function(item) {
+      return item.location === this;
     }
-    
-    function Place(name) {
-      name = name || "place";
-      Item.call(this, name);
-      this.canBeTaken = false; // by default you can't pick up a place
-    
-      this.exits = {}; // a list of mapping from directions to other Places (uh, directions are strings?)
-    
-      this.describe = function () {
-        var _this = this;
-    
-        var ret = titleCase(this.name) + '\n' + (this.description || '') + ' ';
-    
-        if (this.exits && Object.keys(this.exits).length > 0) {
-          var es = Object.keys(this.exits);
-          ret += 'There ';
-          ret += es.length == 1 ? 'is an exit' : 'are exits';
-          ret += ' to the ';
-          ret += series(es);
-          ret += '.';
-        }
-    
-        var items = world.items.filter(function (it) {
-          return it !== you && it.location === _this;
-        });
-        items.forEach(function (i) {
-          i.known = true;
-        });
-    
-        if (items.length > 0) {
-          ret += ' ' + capitalize(series(items.map(function (x) {
-            return x.indefiniteName;
-          }))) + (items.length > 1 ? ' are' : ' is') + ' here.';
-        }
-    
-        return ret;
-      };
-    }
-    
-    function You(name) {
-      name = name || "you";
-      Item.call(this, name);
-      this.indefiniteName = name;
-      this.definiteName = name;
-      this.canBeTaken = false; // by default you can't pick up yourself
-    
-      this.move = function (dir) {
-        if (!this.location || !this.location.exits || !(dir in this.location.exits)) {
-          return "You can't go " + dir + " from here.";
-        }
-    
-        this.location = this.location.exits[dir];
-    
-        if (this.location.known) {
-          return this.glance();
-        } else {
-          return this.look();
-        }
-      };
-    
-      this.look = function () {
-        this.location.known = true;
-        return this.location.describe();
-      };
-    
-      this.glance = function () {
-        return titleCase(this.location.name);
-      };
-    
-      this.canSee = function (item) {
-        return item.location === this.location || item === this.location || item.location === this;
-      };
-    
-      this.examine = function (item) {
-        if (!this.canSee(item)) {
-          return "You can't see " + item.definiteName + " here.";
-        }
-        return item.describe();
-      };
-    
-      this.take = function (item) {
-        if (!this.canSee(item)) {
-          return "You can't see " + item.definiteName + " here.";
-        }
-        if (!item.canBeTaken) {
-          return "You can't pick up " + item.definiteName + ".";
-        }
-        if (this === item.location) {
-          return "You already have " + item.definiteName + ".";
-        }
-        item.location = this;
-        return "You have picked up " + item.definiteName + ".";
-      };
-    
-      this.drop = function (item) {
-        if (this !== item.location) {
-          return "You don't have " + item.definiteName + ".";
-        }
-        item.location = this.location;
-        return "You have dropped " + item.definiteName + ".";
-      };
-    
-      this.inventory = function () {
-        var _this2 = this;
-    
-        var items = world.items.filter(function (i) {
-          return i.location === _this2;
-        }).map(function (i) {
-          return i.indefiniteName;
-        });
-        if (!items.length) return "You don't have anything.";
-        return "You have " + series(items) + ".";
-      };
-    
-      this.use = function (item) {
-    
-        if (!this.canSee(item)) {
-          return "You can't see " + item.definiteName + " here.";
-        }
-        return item.beUsed();
-      };
-    }
-    
-    function parseItem(str) {
+    this.examine = function(item) {
+      if (!this.canSee(item)) {
+        return "You can't see " + item.definiteName + " here.";
+      }
+      return item.describe();
+    };
+    this.take = function(item) {
+      if (!this.canSee(item)) {
+        return "You can't see " + item.definiteName + " here.";
+      }
+      if (!item.canBeTaken) {
+        return "You can't pick up " + item.definiteName + ".";
+      }
+      if (this === item.location) {
+        return "You already have " + item.definiteName + ".";
+      }
+      item.location = this;
+      return "You have picked up " + item.definiteName + ".";
+    };
+    this.drop = function(item) {
+      if (this !== item.location) {
+        return "You don't have " + item.definiteName + ".";
+      }
+      item.location = this.location;
+      return "You have dropped " + item.definiteName + ".";
+    };
+    this.inventory = function() {
+      var _this2 = this;
+      var items = world.items.filter(function(i) {
+        return i.location === _this2;
+      }).map(function(i) {
+        return i.indefiniteName;
+      });
+      if (!items.length) return "You don't have anything.";
+      return "You have " + series(items) + ".";
+    };
+    this.use = function(item) {
+      if (!this.canSee(item)) {
+        return "You can't see " + item.definiteName + " here.";
+      }
+      return item.beUsed();
+    };
+  }
+
+  function parseItem(str) {
       // TODO have it return the item and then... the rest of the string?  maybe there are
       // multiple items
       str = str.toLowerCase().replace(/^(the|a|an) /, '');
       // look up str in keywords for KNOWN items
-    
-      return world.items.filter(function (x) {
+      return world.items.filter(function(x) {
         return x.known;
-      }).find(function (it) {
-        return it.keywords.map(function (x) {
+      }).find(function(it) {
+        return it.keywords.map(function(x) {
           return x.toLowerCase();
         }).includes(str);
       });
+    }  
+  // YOU
+  var you = new You();
+  // PLACES
+  var room = new Place("room");
+  room.description =
+    'You are standing in a room with four walls, no furniture, and no windows.';
+  var closet = new Place("closet");
+  closet.description =
+    'You are standing inside of a closet. It is dim in here.';
+  var tunnel = new Place("underground tunnel");
+  tunnel.description =
+    'You find yourself in an underground tunnel that you can stand in and walk. ' +
+    'The walls of the tunnel are made out of stone.';
+  var pit = new Place("pit");
+  pit.description =
+    'You are now at the bottom of a pit.  This pit is very deep.  The walls of the pit are also made of stone.';
+  var bedroom = new Place("bedroom");
+  bedroom.description =
+    'This room is big, with a huge bed covered in pink blankets.';
+  you.location = room;
+  // EXITS
+  room.exits = {
+    'north': closet,
+    'south': bedroom
+  };
+  bedroom.exits = {
+    'north': room
+  };
+  closet.exits = {
+    'south': room,
+    'east': tunnel
+  };
+  tunnel.exits = {
+    'west': closet,
+    'east': pit
+  };
+  pit.exits = {
+    'up': tunnel
+  };
+  // ITEMS
+  var soup = new Item("can of soup");
+  soup.keywords.push('can', 'soup', 'soup can', 'soupcan');
+  soup.location = closet;
+  soup.closed = true;
+  soup.full = true;
+  soup.origDescribe = soup.describe;
+  soup.describe = function() {
+    if (!you.has(this)) {
+      return "It just looks like a can of soup from here.  Maybe you can examine it more closely if you pick it up.";
     }
-    
-    // YOU
-    var you = new You();
-    
-    // PLACES
-    
-    var room = new Place("room");
-    room.description = 'You are standing in a room with four walls, no furniture, and no windows.';
-    
-    var closet = new Place("closet");
-    closet.description = 'You are standing inside of a closet. It is dim in here.';
-    
-    var tunnel = new Place("underground tunnel");
-    tunnel.description = 'You find yourself in an underground tunnel that you can stand in and walk. '+
-        'The walls of the tunnel are made out of stone.';
-    
-    var pit = new Place("pit");
-    pit.description = 'You are now at the bottom of a pit.  This pit is very deep.  The walls of the pit are also made of stone.';
-    
-    var bedroom = new Place("bedroom");
-    bedroom.description = 'This room is big, with a huge bed covered in pink blankets.';
-    
-    you.location = room;
-    
-    // EXITS
-    room.exits = { 'north': closet, 'south':bedroom };
-    bedroom.exits = {'north': room };
-    closet.exits = { 'south': room, 'east': tunnel };
-    tunnel.exits = { 'west': closet, 'east': pit };
-    pit.exits = { 'up': tunnel };
-    
-    // ITEMS
-    
-    var soup = new Item("can of soup");
-    soup.keywords.push('can', 'soup', 'soup can', 'soupcan');
-    soup.location = closet;
-    soup.closed = true;
-    soup.full = true;
-    soup.origDescribe = soup.describe;
-    soup.describe = function () {
-      var ret = "The can is labeled \"NASS-TEE Split Pea Soup\". ";
-      if (soup.closed) {
-        ret += 'It is sealed shut.';
-      } else if (soup.full) {
-        ret += 'It is open and full of soup.';
-      } else {
-        ret += 'It is empty.';
-      }
-      return ret;
-    };
-    soup.beUsed = function () {
-      if (this.closed) {
-        this.closed = false;
-        return "You rip the soup can open with your bare hands, somehow.";
-      }
-      if (!this.full) {
-        return "You can't use the empty soup can.";
-      }
-      this.full = false;
-      return "You eat the soup.  Yum, tasty room-temperature soup!";
-    };
-    
-    var note = new Item("note");
-    note.location = pit;
-    note.describe = function() {
-       if (note.location !== you) {
-         return "It appears to have some writing on it, but you can't read it if you don't have it.";
-       }
-       return "The note reads:\n\n"+
-        "\"Dear Mom,\n\nPlease do not eat the yummy NASS-TEE Split Pea Soup. I am saving it for dinner.\n"+
-        "Love,\nElla.\"";
+    var ret = "The can is labeled \"NASS-TEE Split Pea Soup\". ";
+    if (soup.closed) {
+      ret += 'It is sealed shut.';
+    } else if (soup.full) {
+      ret += 'It is open and full of soup.';
+    } else {
+      ret += 'It is empty.';
     }
-    
-    var bed = new Item("bed");
-    bed.location = bedroom;
-    bed.describe = function() {
-       //TODO find better way to hide stuff than this
-       var ret = 'The bed is huge with a purple blanket and pink pillows.';
-       if (teddyBear.location === bed) {teddyBear.location = bed.location; teddyBear.known = true;}
-       if (teddyBear.location === bed.location) {ret += ' There is a teddy bear on the bed.';}    
-       return ret;
-        };
-    bed.canBeTaken = false;
-    bed.beUsed = function() {
-        return "You lie down on the bed and fall asleep for a few minutes.  You wake up feeling refreshed.";
+    return ret;
+  };
+  soup.beUsed = function() {
+    if (!you.has(this)) {
+      return "You don't have " + this.definiteName + ".";
     }
-    
-    var teddyBear = new Item("teddy bear");
-    teddyBear.keywords = ['teddy bear','teddybear','teddy','bear'];
-    teddyBear.location = bed;
-    
-    function help() {
-      var ret = '';
-      ret += 'Need help?  Here are some commands:\n';
-      ret += '"Look"/"L": Look at where you are.\n';
-      ret += '"Help"/"H": Ask for help.\n';
-      ret += '"North"/"N": Go north.\n';
-      ret += '"South"/"S": Go south.\n';
-      ret += '... and other directions too.\n';
-      ret += '"Inventory"/"I": List the items in your possession.\n';
-      ret += '"Examine [ITEM]"/"X [ITEM]": Examine an item.\n';
-      ret += '"Take [ITEM]"/"T [ITEM]": Pick up an item.\n';
-      ret += '"Drop [ITEM]"/"DR [ITEM]": Put down an item.\n';
-      ret += '"Use [ITEM]": Use an item.\n';
-    
-      return ret;
+    if (this.closed) {
+      this.closed = false;
+      return "You rip the soup can open with your bare hands, somehow.";
     }
-    
-    function respond(str) {
+    if (!this.full) {
+      return "You can't use the empty soup can.";
+    }
+    this.full = false;
+    return "You eat the soup.  Yum, tasty room-temperature soup!";
+  };
+  var note = new Item("note");
+  note.location = pit;
+  note.describe = function() {
+    if (!you.has(this)) {
+      return "It appears to have some writing on it, but you can't read it if you don't have it.";
+    }
+    return "The note reads:\n\n" +
+      "\"Dear Mom,\n\nPlease do not eat the yummy NASS-TEE Split Pea Soup. I am saving it for dinner.\n" +
+      "Love,\nElla.\"";
+  }
+  var bed = new Item("bed");
+  bed.location = bedroom;
+  bed.describe = function() {
+    //TODO find better way to hide stuff than this
+    var ret = 'The bed is huge with a purple blanket and pink pillows.';
+    if (teddyBear.location === bed) {
+      teddyBear.location = bed.location;
+      teddyBear.known = true;
+    }
+    if (teddyBear.location === bed.location) {
+      ret += ' There is a teddy bear on the bed.';
+    }
+    return ret;
+  };
+  bed.canBeTaken = false;
+  bed.beUsed = function() {
+    return "You lie down on the bed and fall asleep for a few minutes.  You wake up feeling refreshed.";
+  }
+  var teddyBear = new Item("teddy bear");
+  teddyBear.keywords = ['teddy bear', 'teddybear', 'teddy', 'bear'];
+  teddyBear.location = bed;
+
+  function help() {
+    var ret = '';
+    ret += 'Need help?  Here are some commands:\n';
+    ret += '"Look"/"L": Look at where you are.\n';
+    ret += '"Help"/"H": Ask for help.\n';
+    ret += '"North"/"N": Go north.\n';
+    ret += '"South"/"S": Go south.\n';
+    ret += '... and other directions too.\n';
+    ret += '"Inventory"/"I": List the items in your possession.\n';
+    ret += '"Examine [ITEM]"/"X [ITEM]": Examine an item.\n';
+    ret += '"Take [ITEM]"/"T [ITEM]": Pick up an item.\n';
+    ret += '"Drop [ITEM]"/"DR [ITEM]": Put down an item.\n';
+    ret += '"Use [ITEM]": Use an item.\n';
+    return ret;
+  }
+
+  function respond(str) {
       str = str.replace(/\s+/g, ' ').trim();
       str = str.replace(/^"\s*(.*)\s*"$/, '$1');
       str = str.replace(/^'\s*(.*)\s*'$/, '$1');
-    
       var s = str.toLowerCase().replace(/[^a-z0-9 ]/g, '');
       s = s.replace(/\s+/g, ' ').trim();
-      s = s.replace(/\bplease( |$)/, ''); // no need to be polite TODO end with please
-    
-    
+      s = s.replace(/\bplease( |$)/g, '').trim(); // no need to be polite 
       var m;
-    
       // interpet as movement
       m = s;
       if (m.startsWith('go ')) {
@@ -427,7 +438,6 @@
       if (m in dirs) {
         return you.move(dirs[m]);
       };
-    
       // interpret as look
       m = s;
       if ((m + ' ').startsWith('look ') || m === 'l') {
@@ -440,7 +450,6 @@
           return you.look();
         }
       }
-    
       // interpret as examine
       m = s;
       if ((m + ' ').startsWith('examine ') || (m + ' ').startsWith('x ')) {
@@ -448,73 +457,118 @@
         var item = parseItem(m);
         if (item) return you.examine(item);
       }
-    
       // interpret as take
-      var ms = s.replace(/\bpick (.*) up\b/, 'pick up $1').match(/^(?:take|t|get|pick ?up)\s*(.*)$/);
+      var ms = s.replace(/\bpick (.*) up\b/, 'pick up $1').match(
+        /^(?:take|t|get|pick ?up)\s*(.*)$/);
       if (ms) {
         var item = parseItem(ms[1]);
         if (item) return you.take(item);
       }
-    
       // interpret as drop
-      ms = s.replace(/\bput (.*) down\b/, 'put down $1').replace(/\blet (.*) go\b/, 'let go of $1').match(/^(?:drop|dr|let ?go(?: of)?|put ?down|relinquish|release)\s*(.*)$/);
+      ms = s.replace(/\bput (.*) down\b/, 'put down $1').replace(
+        /\blet (.*) go\b/, 'let go of $1').match(
+        /^(?:drop|dr|let ?go(?: of)?|put ?down|relinquish|release)\s*(.*)$/);
       if (ms) {
         var item = parseItem(ms[1]);
         if (item) return you.drop(item);
       }
-    
       // interpret as use
       ms = s.match(/^(?:use)\s*(.*)$/);
       if (ms) {
         var item = parseItem(ms[1]);
         if (item) return you.use(item);
       }
-    
       // interpret as inventory
       ms = s.match(/^(?:inventory|i)\s*(.*)$/);
       if (ms) {
         return you.inventory();
       }
-    
       // interpret as help
       m = s;
       if ((m + ' ').startsWith('help ') || m === 'h') {
         return help();
       }
-    
-      return "Sorry, I don't understand \"" + str + "\". Type \"help\" for help.";
+      return "Sorry, I don't understand \"" + str +
+        "\". Type \"help\" for help.";
     }
-    
-    $(function () {
-      output('Welcome to the game.\n\n' + you.look() + '\n');
-    });
-    
-    function output(str) {
-      var outputSpan = $('<span class="output-span">').hide();
-      outputSpan.text(str + '\n');
-      $('#output').queue(function (next) {
-        $('#output').append(outputSpan);
-        var heightFrac = outputSpan.height() / $(window).height();
-        var duration = heightFrac * 3000;
-    
-        outputSpan.slideDown({ duration: duration, easing: 'linear', complete: next });
-      });
-    }
-    
-    function processInput() {
+  
+  // NEVER ALLOW THE FOCUS TO LEAVE THE INPUT BOX!  (seems evil)
+  $('#input').blur(function() {
+    window.setTimeout(function() {
+      $('#input').focus();
+    }, 0)
+  });
+  // IMPLEMENT COMMAND HISTORY WITH UP AND DOWN ARROWS		
+  var commandHistory = (function() {
+    var history = [];
+    var localHistory = [''];
+    var index = 0;
+    var add = function(command) {
+      history.push(command);
+      index = history.length;
+      localHistory = history.slice();
+      localHistory.push('');
+    };
+    var arrow = function(up, command) {
+      localHistory[index] = command;
+      if (up) {
+        index = Math.max(index - 1, 0);
+      } else {
+        index = Math.min(index + 1, history.length);
+      }
+      return localHistory[index];
+    };
+    return {
+      add: add,
+      arrow: arrow
+    };
+  })();
+  var KEYCODE_UP = 38;
+  var KEYCODE_DOWN = 40;
+  $('#input').keydown(function(e) {
+    if ((e.which == KEYCODE_UP) || (e.which == KEYCODE_DOWN)) {
       var inputText = $('#input').val();
-      $('#input').val('');
-      var inputSpan = $('<span>');
-      inputSpan.text(">>\xA0" + inputText + '\n');
-      $('#output').queue(function (next) {
-        $('#output').append(inputSpan);
-        next();
-      });
-      var outputText = respond(inputText);
-      output(outputText + '\n');
+      var selectedCommand = commandHistory.arrow(e.which == KEYCODE_UP,
+        inputText);
+      $('#input').val(selectedCommand);
     }
-        
-      
-  </script>
-</html>
+  });
+  $(function() {
+    $('#input').focus();
+    output("");
+    output('Welcome to the game.\n\n' + you.look() + '\n');
+  });
 
+  function output(str) {
+    var outputSpan = $('<span class="output-span">').css('visibility',
+      'hidden');
+    outputSpan.text(str + '\n');
+    $('#output').queue(function(next) {
+      $('#output').append(outputSpan);
+      var heightFrac = outputSpan.height() / $(window).height();
+      outputSpan.hide().css('visibility', 'visible');
+      var duration = heightFrac * 3000;
+      outputSpan.slideDown({
+        duration: duration,
+        easing: 'linear',
+        complete: next
+      });
+    });
+  }
+
+  function processInput() {
+    var inputText = $('#input').val();
+    commandHistory.add(inputText);
+    $('#input').val('');
+    var inputSpan = $('<span>');
+    inputSpan.text(">>\xA0" + inputText + '\n');
+    $('#output').queue(function(next) {
+      $('#output').append(inputSpan);
+      next();
+    });
+    var outputText = respond(inputText);
+    output(outputText + '\n');
+  }
+</script>
+
+</html>
