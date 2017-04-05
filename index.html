@@ -6,7 +6,7 @@
   <link href="https://fonts.googleapis.com/css?family=VT323" rel="stylesheet">
   <script src="https://code.jquery.com/jquery-3.1.1.js" integrity="sha256-16cdPddA6VdVInumRGo6IbivbERE8p7CQR3HzTBuELA=" crossorigin="anonymous"></script>
   <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js" integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa"
-  crossorigin="anonymous"></script>
+    crossorigin="anonymous"></script>
   <style>
     html * {
       font-family: 'VT323', monospace;
@@ -14,6 +14,7 @@
       padding: 0;
       margin: 0;
     }
+
     #adventure-window {
       width: 90% height: 90%;
       border: 5px solid #0f0;
@@ -22,25 +23,30 @@
       background-color: black;
       font-size: 1.5em;
     }
+
     .output-span {
       color: #ff0;
     }
+
     .bottom-container {
       position: relative;
       width: 100%;
       height: 85%;
-      overflow: hidden;	
+      overflow: hidden;
     }
+
     #output {
       position: absolute;
-      bottom: 0px;     
-	  overflow: hidden;		  
-	  width: 100%;
+      bottom: 0px;
+      overflow: hidden;
+      width: 100%;
     }
-	#output span{
-	  white-space: pre-wrap;
+
+    #output span {
+      white-space: pre-wrap;
       overflow-wrap: break-word;
     }
+
     #input {
       border: none;
       color: #0f0;
@@ -48,9 +54,11 @@
       font-size: 1em;
       flex-grow: 100;
     }
+
     #adventure-form {
       display: flex;
     }
+
     .prompt {
       float: left;
     }
@@ -86,8 +94,18 @@
   //TODO default bidirectional exits.
   //TODO limit to inventory?
   //TODO generic command functions
-  
   // helper objects and functions 
+  function moveCaretToEnd(el) {
+    if (typeof el.selectionStart == "number") {
+      el.selectionStart = el.selectionEnd = el.value.length;
+    } else if (typeof el.createTextRange != "undefined") {
+      el.focus();
+      var range = el.createTextRange();
+      range.collapse(false);
+      range.select();
+    }
+  }
+
   function titleCase(str) {
     return str.toLowerCase().split(" ").map(function(v) {
       return v.charAt(0).toUpperCase() + v.slice(1);
@@ -291,20 +309,50 @@
       return item.beUsed();
     };
   }
-
+  // parsing the input...command and an arity:  
+  // 0: VERB
+  // 1: VERB (PREPOSITION) OBJECT
+  // 2: VERB OBJECT  OBJECT  
+  // give object object  
+  // parseItem(str) should return an item and the rest of the string.    
   function parseItem(str) {
-      // TODO have it return the item and then... the rest of the string?  maybe there are
-      // multiple items
-      str = str.toLowerCase().replace(/^(the|a|an) /, '');
-      // look up str in keywords for KNOWN items
-      return world.items.filter(function(x) {
-        return x.known;
-      }).find(function(it) {
-        return it.keywords.map(function(x) {
-          return x.toLowerCase();
-        }).includes(str);
+    var ret = parseItemAndRemainder(str);
+    if (!ret) return ret;
+    return ret.item;
+  }
+
+  function parseItemAndRemainder(str) {
+    str = str.toLowerCase().replace(/^(the|a|an) /i, ''); // strip off articles
+    // get keywords for all known items
+    var knownItems = [].concat.apply([], world.items.filter(function(x) {
+      return x.known;
+    }).map(function(x) {
+      return x.keywords.
+      map(function(k) {
+        return {
+          keyword: k.toLowerCase(),
+          canSee: you.canSee(x),
+          item: x
+        };
       });
-    }  
+    }));
+    // sort these items so that nearby items are more likely to be identified,
+    // and do the longest match first
+    knownItems.sort(function(x, y) {
+      if (x.canSee != y.canSee) {
+        return x.canSee ? -1 : 1;
+      }
+      return y.keyword.length - x.keyword.length;
+    });
+    var found = knownItems.find(function(x) {
+      return str.startsWith(x.keyword);
+    });
+    if (!found) return null;
+    return {
+      item: found.item,
+      remainder: str.substring(found.keyword.length).trim()
+    };
+  }
   // YOU
   var you = new You();
   // PLACES
@@ -318,6 +366,7 @@
   tunnel.description =
     'You find yourself in an underground tunnel that you can stand in and walk. ' +
     'The walls of the tunnel are made out of stone.';
+  tunnel.keywords.push('tunnel');
   var pit = new Place("pit");
   pit.description =
     'You are now at the bottom of a pit.  This pit is very deep.  The walls of the pit are also made of stone.';
@@ -428,75 +477,74 @@
   }
 
   function respond(str) {
-      str = str.replace(/\s+/g, ' ').trim();
-      str = str.replace(/^"\s*(.*)\s*"$/, '$1');
-      str = str.replace(/^'\s*(.*)\s*'$/, '$1');
-      var s = str.toLowerCase().replace(/[^a-z0-9 ]/g, '');
-      s = s.replace(/\s+/g, ' ').trim();
-      s = s.replace(/\bplease( |$)/g, '').trim(); // no need to be polite 
-      var m;
-      // interpet as movement
-      m = s;
-      if (m.startsWith('go ')) {
-        m = m.substring(3);
-      }
-      if (m in dirs) {
-        return you.move(dirs[m]);
-      };
-      // interpret as look
-      m = s;
-      if ((m + ' ').startsWith('look ') || m === 'l') {
-        m = m.substring((m + ' ').indexOf(' ') + 1).trim();
-        m = m.replace(/^at /, '');
-        if (m) {
-          var item = parseItem(m);
-          if (item) return you.examine(item);
-        } else {
-          return you.look();
-        }
-      }
-      // interpret as examine
-      m = s;
-      if ((m + ' ').startsWith('examine ') || (m + ' ').startsWith('x ')) {
-        m = m.substring((m + ' ').indexOf(' ') + 1).trim();
+    str = str.replace(/\s+/g, ' ').trim();
+    str = str.replace(/^"\s*(.*)\s*"$/, '$1');
+    str = str.replace(/^'\s*(.*)\s*'$/, '$1');
+    var s = str.toLowerCase().replace(/[^a-z0-9 ]/g, '');
+    s = s.replace(/\s+/g, ' ').trim();
+    s = s.replace(/\bplease( |$)/g, '').trim(); // no need to be polite 
+    var m;
+    // interpet as movement
+    m = s;
+    if (m.startsWith('go ')) {
+      m = m.substring(3);
+    }
+    if (m in dirs) {
+      return you.move(dirs[m]);
+    };
+    // interpret as look
+    m = s;
+    if ((m + ' ').startsWith('look ') || m === 'l') {
+      m = m.substring((m + ' ').indexOf(' ') + 1).trim();
+      m = m.replace(/^at /, '');
+      if (m) {
         var item = parseItem(m);
         if (item) return you.examine(item);
+      } else {
+        return you.look();
       }
-      // interpret as take
-      var ms = s.replace(/\bpick (.*) up\b/, 'pick up $1').match(
-        /^(?:take|t|get|pick ?up)\s*(.*)$/);
-      if (ms) {
-        var item = parseItem(ms[1]);
-        if (item) return you.take(item);
-      }
-      // interpret as drop
-      ms = s.replace(/\bput (.*) down\b/, 'put down $1').replace(
-        /\blet (.*) go\b/, 'let go of $1').match(
-        /^(?:drop|dr|let ?go(?: of)?|put ?down|relinquish|release)\s*(.*)$/);
-      if (ms) {
-        var item = parseItem(ms[1]);
-        if (item) return you.drop(item);
-      }
-      // interpret as use
-      ms = s.match(/^(?:use)\s*(.*)$/);
-      if (ms) {
-        var item = parseItem(ms[1]);
-        if (item) return you.use(item);
-      }
-      // interpret as inventory
-      ms = s.match(/^(?:inventory|i)\s*(.*)$/);
-      if (ms) {
-        return you.inventory();
-      }
-      // interpret as help
-      m = s;
-      if ((m + ' ').startsWith('help ') || m === 'h') {
-        return help();
-      }
-      return "Sorry, I don't understand \"" + str +
-        "\". Type \"help\" for help.";
     }
-  
+    // interpret as examine
+    m = s;
+    if ((m + ' ').startsWith('examine ') || (m + ' ').startsWith('x ')) {
+      m = m.substring((m + ' ').indexOf(' ') + 1).trim();
+      var item = parseItem(m);
+      if (item) return you.examine(item);
+    }
+    // interpret as take
+    var ms = s.replace(/\bpick (.*) up\b/, 'pick up $1').match(
+      /^(?:take|t|get|pick ?up)\s*(.*)$/);
+    if (ms) {
+      var item = parseItem(ms[1]);
+      if (item) return you.take(item);
+    }
+    // interpret as drop
+    ms = s.replace(/\bput (.*) down\b/, 'put down $1').replace(
+      /\blet (.*) go\b/, 'let go of $1').match(
+      /^(?:drop|dr|let ?go(?: of)?|put ?down|relinquish|release)\s*(.*)$/);
+    if (ms) {
+      var item = parseItem(ms[1]);
+      if (item) return you.drop(item);
+    }
+    // interpret as use
+    ms = s.match(/^(?:use)\s*(.*)$/);
+    if (ms) {
+      var item = parseItem(ms[1]);
+      if (item) return you.use(item);
+    }
+    // interpret as inventory
+    ms = s.match(/^(?:inventory|i)\s*(.*)$/);
+    if (ms) {
+      return you.inventory();
+    }
+    // interpret as help
+    m = s;
+    if ((m + ' ').startsWith('help ') || m === 'h') {
+      return help();
+    }
+    return "Sorry, I don't understand \"" + str +
+      "\". Type \"help\" for help.";
+  }
   // NEVER ALLOW THE FOCUS TO LEAVE THE INPUT BOX!  (seems evil)
   $('#input').blur(function() {
     window.setTimeout(function() {
@@ -536,6 +584,8 @@
       var selectedCommand = commandHistory.arrow(e.which == KEYCODE_UP,
         inputText);
       $('#input').val(selectedCommand);
+      moveCaretToEnd($('#input').get(0));
+      e.preventDefault();
     }
   });
   $(function() {
