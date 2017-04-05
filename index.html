@@ -234,6 +234,57 @@
     };
   }
 
+  // silly template language: 
+  // "use ?i1" means "use" followed by an ITEM, to be passed as FIRST parameter to the function.
+  // "give ?i1 to ?i2", means "give"
+  // "go ?d1" // d means DIRECTION
+  // command structure
+  var commands = [{
+      functionName: 'look',
+      templates: ['look', 'l'],
+      help: '"Look" or "L": Look around you.'
+    },
+    {
+      functionName: 'move',
+      templates: ['?d1', 'go ?d1', 'move ?d1', 'walk ?d1'],
+      help: '"Go [DIRECTION]" or "[DIRECTION]": Go in the specified direction.\n' +
+        '... examples: "Go North"/"North"/"N", "Go South"/"South"/"S", "East"'
+
+    },
+    {
+      functionName: 'inventory',
+      templates: ['inventory', 'i'],
+      help: '"Inventory" or "I": List the items in your possession'
+    },
+    {
+      functionName: 'take',
+      templates: ['take ?i1', 't ?i1', 'get ?i1', 'pick up ?i1', 'pickup ?i1', 'pick ?i1 up'],
+      help: '"Take [ITEM]" or "T [ITEM]": Pick up an item.'
+    },
+    {
+      functionName: 'drop',
+      templates: ['drop ?i1', 'dr ?i1', 'put down ?i1', 'put ?i1 down', 'let ?i1 go', 'let go of ?i1', 'let go ?i1',
+        'release ?i1'
+      ],
+      help: '"Drop [ITEM]" or "DR [ITEM]": Put down an item.'
+    },
+    {
+      functionName: 'examine',
+      templates: ['examine ?i1', 'x ?i1', 'look ?i1', 'look at ?i1', 'l ?i1', 'l at ?i1'],
+      help: '"Examine [ITEM]" or "X [ITEM]": Examine an item.'
+    },
+    {
+      functionName: 'use',
+      templates: ['use ?i1'],
+      help: '"Use [ITEM]": Use an item in some way.'
+    },
+    {
+      functionName: 'help',
+      templates: ['help', 'h'],
+      help: '"Help" or "H": Read these words.'
+    }
+  ];
+
   function You(name) {
     name = name || "you";
     Item.call(this, name);
@@ -246,11 +297,6 @@
       }
       this.location = this.location.exits[dir];
       return this.look();
-      /*if (this.location.known) {
-        return this.glance();
-      } else {
-        return this.look();
-      }*/
     };
     this.look = function() {
       this.location.known = true;
@@ -308,6 +354,14 @@
       }
       return item.beUsed();
     };
+    this.help = function() {
+      var ret = '';
+      ret += 'Need help?  Here are some commands:\n';
+      ret += commands.filter(c => c.help).map(c => c.help).join('\n');
+      ret += '\nGood luck!';
+      return ret;
+    };
+
   }
   // parsing the input...command and an arity:  
   // 0: VERB
@@ -321,10 +375,102 @@
     return ret.item;
   }
 
+  function interpretInput(str) {
+
+    str = str.toLowerCase().replace(/[^a-z0-9 ]/g, '');
+    str = str.replace(/\s+/g, ' ').trim();
+    str = str.replace(/\bplease( |$)/g, '').trim(); // no need to be polite 
+
+    // sort templates by length
+    if (!interpretInput.templates) {
+      interpretInput.templates = flatten(commands.map(c => c.templates.map(t => ({
+        functionName: c.functionName,
+        pattern: t.toLowerCase().split(/\s+/)
+      }))));
+      interpretInput.templates.sort((x, y) => (y.pattern.length - x.pattern.length));
+      //TODO maybe they should be ordered by number of item/dirs, or length of words?
+    }
+
+    templateLoop:
+      for (var i = 0; i < interpretInput.templates.length; i++) {
+        var template = interpretInput.templates[i];
+        var m = str;
+        var ret = {
+          functionName: template.functionName,
+          parameters: [],
+          template: template.pattern.join(' ')
+        };
+        for (var j = 0; j < template.pattern.length; j++) {
+          var token = template.pattern[j];
+          if (token.charAt(0) == '?') {
+            var paramIndex = parseInt(token.substring(2), 10) - 1;
+            if (!(paramIndex >= 0)) {
+              console.log('bad pattern index in: ' + template.pattern.join(' '));
+              continue templateLoop;
+            }
+            var result;
+            if (token.charAt(1) == 'i') {
+              // interpret as an item
+              result = parseItemAndRemainder(m);
+              if (!result) continue templateLoop; // not an item
+              ret.parameters[paramIndex] = result.item;
+            } else if (token.charAt(1) == 'd') {
+              // interpret as direction
+              result = parseDirectionAndRemainder(m);
+              if (!result) continue templateLoop; // not a direction
+              ret.parameters[paramIndex] = result.direction;
+            } else {
+              // don't recognize the type of pattern word
+              console.log('bad pattern type in: ' + template.pattern.join(' '));
+              continue templateLoop;
+            }
+            m = result.remainder;
+          } else {
+            if (!(m + ' ').startsWith(token)) {
+              // doesn't match
+              continue templateLoop;
+            }
+            m = m.substring(token.length + 1); // remove a space or go off the end, which is fine				
+          }
+        }
+        // we made it!  Or did we?  If there's stuff after the match, it's not a match
+        if (m.length == 0) {
+          return ret;
+        }
+
+      }
+    return null; // no match
+
+  }
+
+  function flatten(arrayOfArray) {
+    return [].concat.apply([], arrayOfArray);
+  }
+
+  function parseDirectionAndRemainder(str) {
+    str = str.toLowerCase().replace(/^(the|a|an) /i, '').trim(); // strip off articles
+    // TODO strip off "to" or "toward"?
+
+    var space = (str + ' ').indexOf(' ');
+    if (!space) return null; // no words
+
+    var word = str.substring(0, space);
+    var remainder = str.substring(space + 1);
+
+    if (word in dirs) {
+      return {
+        direction: dirs[word],
+        remainder: str.substring(space + 1)
+      }
+    }
+
+    return null; // couldn't find direction
+  }
+
   function parseItemAndRemainder(str) {
     str = str.toLowerCase().replace(/^(the|a|an) /i, ''); // strip off articles
     // get keywords for all known items
-    var knownItems = [].concat.apply([], world.items.filter(function(x) {
+    var knownItems = flatten(world.items.filter(function(x) {
       return x.known;
     }).map(function(x) {
       return x.keywords.
@@ -353,6 +499,105 @@
       remainder: str.substring(found.keyword.length).trim()
     };
   }
+
+  function respond(str) {
+    str = str.replace(/\s+/g, ' ').trim();
+    str = str.replace(/^"\s*(.*)\s*"$/, '$1');
+    str = str.replace(/^'\s*(.*)\s*'$/, '$1');
+
+    var interpretation = interpretInput(str);
+
+    if (interpretation) {
+      //console.log(interpretation);
+      return you[interpretation.functionName].apply(you, interpretation.parameters);
+    }
+
+    return "Sorry, I don't understand \"" + str +
+      "\". Type \"help\" for help.";
+  }
+
+  // NEVER ALLOW THE FOCUS TO LEAVE THE INPUT BOX!  (seems evil)
+  $('#input').blur(function() {
+    window.setTimeout(function() {
+      $('#input').focus();
+    }, 0)
+  });
+  // IMPLEMENT COMMAND HISTORY WITH UP AND DOWN ARROWS		
+  var commandHistory = (function() {
+    var history = [];
+    var localHistory = [''];
+    var index = 0;
+    var add = function(command) {
+      history.push(command);
+      index = history.length;
+      localHistory = history.slice();
+      localHistory.push('');
+    };
+    var arrow = function(up, command) {
+      localHistory[index] = command;
+      if (up) {
+        index = Math.max(index - 1, 0);
+      } else {
+        index = Math.min(index + 1, history.length);
+      }
+      return localHistory[index];
+    };
+    return {
+      add: add,
+      arrow: arrow
+    };
+  })();
+  var KEYCODE_UP = 38;
+  var KEYCODE_DOWN = 40;
+  $('#input').keydown(function(e) {
+    if ((e.which == KEYCODE_UP) || (e.which == KEYCODE_DOWN)) {
+      var inputText = $('#input').val();
+      var selectedCommand = commandHistory.arrow(e.which == KEYCODE_UP,
+        inputText);
+      $('#input').val(selectedCommand);
+      moveCaretToEnd($('#input').get(0));
+      e.preventDefault();
+    }
+  });
+  $(function() {
+    $('#input').focus();
+    output("");
+    output('Welcome to the game.\n\n' + you.look() + '\n');
+  });
+
+  function output(str) {
+    var outputSpan = $('<span class="output-span">').css('visibility',
+      'hidden');
+    outputSpan.text(str + '\n');
+    $('#output').queue(function(next) {
+      $('#output').append(outputSpan);
+      var heightFrac = outputSpan.height() / $(window).height();
+      outputSpan.hide().css('visibility', 'visible');
+      var duration = heightFrac * 3000;
+      outputSpan.slideDown({
+        duration: duration,
+        easing: 'linear',
+        complete: next
+      });
+    });
+  }
+
+  function processInput() {
+    var inputText = $('#input').val();
+    commandHistory.add(inputText);
+    $('#input').val('');
+    var inputSpan = $('<span>');
+    inputSpan.text(">>\xA0" + inputText + '\n');
+    $('#output').queue(function(next) {
+      $('#output').append(inputSpan);
+      next();
+    });
+    var outputText = respond(inputText);
+    output(outputText + '\n');
+  }
+
+  ///////////// SPECIFIC STUFF /////////////////
+
   // YOU
   var you = new You();
   // PLACES
@@ -459,171 +704,6 @@
   var teddyBear = new Item("teddy bear");
   teddyBear.keywords = ['teddy bear', 'teddybear', 'teddy', 'bear'];
   teddyBear.location = bed;
-
-  function help() {
-    var ret = '';
-    ret += 'Need help?  Here are some commands:\n';
-    ret += '"Look"/"L": Look at where you are.\n';
-    ret += '"Help"/"H": Ask for help.\n';
-    ret += '"North"/"N": Go north.\n';
-    ret += '"South"/"S": Go south.\n';
-    ret += '... and other directions too.\n';
-    ret += '"Inventory"/"I": List the items in your possession.\n';
-    ret += '"Examine [ITEM]"/"X [ITEM]": Examine an item.\n';
-    ret += '"Take [ITEM]"/"T [ITEM]": Pick up an item.\n';
-    ret += '"Drop [ITEM]"/"DR [ITEM]": Put down an item.\n';
-    ret += '"Use [ITEM]": Use an item.\n';
-    return ret;
-  }
-
-  function respond(str) {
-    str = str.replace(/\s+/g, ' ').trim();
-    str = str.replace(/^"\s*(.*)\s*"$/, '$1');
-    str = str.replace(/^'\s*(.*)\s*'$/, '$1');
-    var s = str.toLowerCase().replace(/[^a-z0-9 ]/g, '');
-    s = s.replace(/\s+/g, ' ').trim();
-    s = s.replace(/\bplease( |$)/g, '').trim(); // no need to be polite 
-    var m;
-    // interpet as movement
-    m = s;
-    if (m.startsWith('go ')) {
-      m = m.substring(3);
-    }
-    if (m in dirs) {
-      return you.move(dirs[m]);
-    };
-    // interpret as look
-    m = s;
-    if ((m + ' ').startsWith('look ') || m === 'l') {
-      m = m.substring((m + ' ').indexOf(' ') + 1).trim();
-      m = m.replace(/^at /, '');
-      if (m) {
-        var item = parseItem(m);
-        if (item) return you.examine(item);
-      } else {
-        return you.look();
-      }
-    }
-    // interpret as examine
-    m = s;
-    if ((m + ' ').startsWith('examine ') || (m + ' ').startsWith('x ')) {
-      m = m.substring((m + ' ').indexOf(' ') + 1).trim();
-      var item = parseItem(m);
-      if (item) return you.examine(item);
-    }
-    // interpret as take
-    var ms = s.replace(/\bpick (.*) up\b/, 'pick up $1').match(
-      /^(?:take|t|get|pick ?up)\s*(.*)$/);
-    if (ms) {
-      var item = parseItem(ms[1]);
-      if (item) return you.take(item);
-    }
-    // interpret as drop
-    ms = s.replace(/\bput (.*) down\b/, 'put down $1').replace(
-      /\blet (.*) go\b/, 'let go of $1').match(
-      /^(?:drop|dr|let ?go(?: of)?|put ?down|relinquish|release)\s*(.*)$/);
-    if (ms) {
-      var item = parseItem(ms[1]);
-      if (item) return you.drop(item);
-    }
-    // interpret as use
-    ms = s.match(/^(?:use)\s*(.*)$/);
-    if (ms) {
-      var item = parseItem(ms[1]);
-      if (item) return you.use(item);
-    }
-    // interpret as inventory
-    ms = s.match(/^(?:inventory|i)\s*(.*)$/);
-    if (ms) {
-      return you.inventory();
-    }
-    // interpret as help
-    m = s;
-    if ((m + ' ').startsWith('help ') || m === 'h') {
-      return help();
-    }
-    return "Sorry, I don't understand \"" + str +
-      "\". Type \"help\" for help.";
-  }
-  // NEVER ALLOW THE FOCUS TO LEAVE THE INPUT BOX!  (seems evil)
-  $('#input').blur(function() {
-    window.setTimeout(function() {
-      $('#input').focus();
-    }, 0)
-  });
-  // IMPLEMENT COMMAND HISTORY WITH UP AND DOWN ARROWS		
-  var commandHistory = (function() {
-    var history = [];
-    var localHistory = [''];
-    var index = 0;
-    var add = function(command) {
-      history.push(command);
-      index = history.length;
-      localHistory = history.slice();
-      localHistory.push('');
-    };
-    var arrow = function(up, command) {
-      localHistory[index] = command;
-      if (up) {
-        index = Math.max(index - 1, 0);
-      } else {
-        index = Math.min(index + 1, history.length);
-      }
-      return localHistory[index];
-    };
-    return {
-      add: add,
-      arrow: arrow
-    };
-  })();
-  var KEYCODE_UP = 38;
-  var KEYCODE_DOWN = 40;
-  $('#input').keydown(function(e) {
-    if ((e.which == KEYCODE_UP) || (e.which == KEYCODE_DOWN)) {
-      var inputText = $('#input').val();
-      var selectedCommand = commandHistory.arrow(e.which == KEYCODE_UP,
-        inputText);
-      $('#input').val(selectedCommand);
-      moveCaretToEnd($('#input').get(0));
-      e.preventDefault();
-    }
-  });
-  $(function() {
-    $('#input').focus();
-    output("");
-    output('Welcome to the game.\n\n' + you.look() + '\n');
-  });
-
-  function output(str) {
-    var outputSpan = $('<span class="output-span">').css('visibility',
-      'hidden');
-    outputSpan.text(str + '\n');
-    $('#output').queue(function(next) {
-      $('#output').append(outputSpan);
-      var heightFrac = outputSpan.height() / $(window).height();
-      outputSpan.hide().css('visibility', 'visible');
-      var duration = heightFrac * 3000;
-      outputSpan.slideDown({
-        duration: duration,
-        easing: 'linear',
-        complete: next
-      });
-    });
-  }
-
-  function processInput() {
-    var inputText = $('#input').val();
-    commandHistory.add(inputText);
-    $('#input').val('');
-    var inputSpan = $('<span>');
-    inputSpan.text(">>\xA0" + inputText + '\n');
-    $('#output').queue(function(next) {
-      $('#output').append(inputSpan);
-      next();
-    });
-    var outputText = respond(inputText);
-    output(outputText + '\n');
-  }
 </script>
 
 </html>
