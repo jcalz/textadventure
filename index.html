@@ -194,10 +194,12 @@
         return "You can't use " + this.definiteName + ".";
       };
       this.known = false; // part of the state
-      this.describe = function() {
+      
+	  this.beExaminedBy = function(subject) {
         var ret = this.description || 'It\'s just ' + this.indefiniteName + '.';
         return ret;
       };
+	  
       // copy the state of this item into a string
       this.serialize = function() {
         //TODO			
@@ -213,7 +215,7 @@
       Item.call(this, name);
       this.canBeTaken = false; // by default you can't pick up a place
       this.exits = {}; // a list of mapping from directions to other Places (uh, directions are strings?)
-      this.describe = function() {
+      this.beExaminedBy = function(subject) {
         var _this = this;
         var ret = titleCase(this.name) + '\n' + (this.description || '') + ' ';
         if (this.exits && Object.keys(this.exits).length > 0) {
@@ -225,7 +227,7 @@
           ret += '.';
         }
         var items = world.items.filter(function(it) {
-          return it !== you && it.location === _this;
+          return it !== subject && it.location === _this;
         });
         items.forEach(function(i) {
           i.known = true;
@@ -262,10 +264,22 @@
       move.templates = ['?d1', 'go ?d1', 'move ?d1', 'walk ?d1'];
       move.help = 'Go in the specified direction, like North or South.';
       this.move = move;
+	  
+	  var climb = function () {
+		 return this.move('up');
+	  };
+	  climb.templates = ['climb', 'climb up'];
+	  this.climb = climb;
+	  
+	  var climbDown = function () {
+		return this.move('down');
+	  };
+	  climbDown.templates = ['climb down'];
+	  this.climbDown = climbDown;
 
       var look = function look() {
         this.location.known = true;
-        return this.location.describe();
+        return this.location.beExaminedBy(this);
       };
       look.templates = ['look', 'l'];
       look.help = 'Look around you.';
@@ -278,16 +292,6 @@
       this.has = function(item) {
         return item.location === this;
       };
-
-      var examine = function examine(item) {
-        if (!this.canSee(item)) {
-          return "You can't see " + item.definiteName + " here.";
-        }
-        return item.describe();
-      };
-      examine.templates = ['examine ?i1', 'x ?i1', 'look ?i1', 'look at ?i1', 'l ?i1', 'l at ?i1'];
-      examine.help = 'Examine an item.';
-      this.examine = examine;
 
       var take = function take(item) {
         if (!this.canSee(item)) {
@@ -333,16 +337,6 @@
       inventory.help = 'List the items in your possession.';
       this.inventory = inventory;
 
-      var use = function use(item) {
-        if (!this.canSee(item)) {
-          return "You can't see " + item.definiteName + " here.";
-        }
-        return item.beUsed();
-      };
-      use.templates = ['use ?i1'];
-      use.help = 'Use an item in some way.';
-      this.use = use;
-
       var help = function help() {
         var ret = '';
         ret += 'Need help?  Here are some commands:\n';
@@ -381,7 +375,7 @@
             return "You don't have " + object.definiteName + '.';
           }
           if (!(objectCommandName in object)) {
-            return "You can't do that.";
+		    return "You can't "+subjectCommandName.toLowerCase()+" "+object.definiteName+".";           
           }
           var args = Array.from(arguments);
           args[0] = this;
@@ -393,6 +387,10 @@
         }
         this[subjectCommandName] = command;
       };
+	  
+	  this.addCommand('examine','beExaminedBy',['examine ?i1', 'x ?i1', 'look ?i1', 'look at ?i1', 'l ?i1', 'l at ?i1'],
+		'Examine an item.', true);
+	  
     }
 
     // parsing the input...command and an arity:  
@@ -646,8 +644,10 @@
     // YOU
     var you = new You();
 
+	you.addCommand('use', 'beUsedBy', ['use ?i1'], 'Use an item in some way.', true);
     you.addCommand('read', 'beReadBy', ['read ?i1'], 'Read something.', true);
     you.addCommand('eat', 'beEatenBy', ['eat ?i1'], null, true, true);
+	you.addCommand('open', 'beOpenedBy', ['open ?i1'], null, true);
 
     // PLACES
     var room = new Place("room");
@@ -683,18 +683,18 @@
     pit.exits = {
       'up': tunnel
     };
+
     // ITEMS
     var soup = new Item("can of soup");
     soup.keywords.push('can', 'soup', 'soup can', 'soupcan');
     soup.location = closet;
     soup.closed = true;
-    soup.full = true;
-    soup.origDescribe = soup.describe;
-    soup.describe = function() {
-      if (!you.has(this)) {
+    soup.full = true;    
+    soup.beExaminedBy = function(subject) {
+      if (!subject.has(this)) {
         return "It just looks like a can of soup from here.  Maybe you can examine it more closely if you pick it up.";
       }
-      var ret = "The can is labeled \"NASS-TEE Split Pea Soup\".";
+      var ret = "The can is labeled \"NASS-TEE Split Pea Soup\". ";
       if (soup.closed) {
         ret += 'It is sealed shut.';
       } else if (soup.full) {
@@ -704,6 +704,17 @@
       }
       return ret;
     };
+	soup.beOpenedBy = function(subject) {
+		if (!subject.has(this)) {
+			return "You don't have " + this.definiteName + ".";
+		}
+		if (!this.closed) {
+			return "It's already been opened.";
+		}
+		this.closed = false;
+		return "You rip the soup can open with your bare hands, somehow.";
+		
+	}
     soup.beReadBy = function(subject) {
       if (!subject.has(this)) {
         return "It looks like there's writing on it, but you can't read it from here.";
@@ -712,18 +723,17 @@
         '"NASS-TEE Split Pea Soup\n\n  If you like squished-up peas, you\'re sure to love these!\n' +
         '  Plop it in a bowl, or eat the can whole!\n' + '  It goes in as soup, but comes out as "';
     };
-    soup.beUsed = function() {
-      if (!you.has(this)) {
+    soup.beUsedBy = function(subject) {
+      if (!subject.has(this)) {
         return "You don't have " + this.definiteName + ".";
       }
       if (this.closed) {
-        this.closed = false;
-        return "You rip the soup can open with your bare hands, somehow.";
+        return this.beOpenedBy(subject);
       }
       if (!this.full) {
         return "You can't use the empty soup can.";
       }
-      return this.beEatenBy(you);
+      return this.beEatenBy(subject);
     };
     soup.beEatenBy = function(subject) {
       if (this.closed) {
@@ -733,13 +743,13 @@
         this.full = false;
         return "You eat the soup.  Yum, tasty room-temperature soup!";
       }
-      return "You can't eat it; it's empty.";
+      return "You can't eat it; the can is empty.";
     };
 
     var note = new Item("note");
     note.location = pit;
-    note.describe = function() {
-      if (!you.has(this)) {
+    note.beExaminedBy = function(subject) {
+      if (!subject.has(this)) {
         return "It appears to have some writing on it, but you can't read it if you don't have it.";
       }
       return "There's definitely writing on it.";
@@ -755,7 +765,7 @@
 
     var bed = new Item("bed");
     bed.location = bedroom;
-    bed.describe = function() {
+    bed.beExaminedBy = function(subject) {
       //TODO find better way to hide stuff than this
       var ret = 'The bed is huge with a purple blanket and pink pillows.';
       if (teddyBear.location === bed) {
@@ -768,7 +778,7 @@
       return ret;
     };
     bed.canBeTaken = false;
-    bed.beUsed = function() {
+    bed.beUsedBy = function(subject) {
       return "You lie down on the bed and fall asleep for a few minutes.  You wake up feeling refreshed.";
     };
     var teddyBear = new Item("teddy bear");
