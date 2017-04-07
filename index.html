@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html>
+
 <head>
   <meta http-equiv="Content-Type" content="text/html; charset=ascii">
   <title>Text Adventure</title>
@@ -101,9 +102,7 @@
     //TODO items: visible,hidden,already described in the room, etc.
     //TODO default bidirectional exits.
     //TODO limit to inventory?
-
     // helper objects and functions 
-
     function moveCaretToEnd(el) {
       if (typeof el.selectionStart == "number") {
         el.selectionStart = el.selectionEnd = el.value.length;
@@ -159,7 +158,6 @@
     // WORLD, GLOBAL VARIABLE
     var world = function() {
       var itemMap = {};
-
       return {
         add: function add(item) {
           var id = item.name.toLowerCase().replace(/[^a-z0-9_ ]/g, '').trim().replace(/\s+/g, '_');
@@ -184,22 +182,18 @@
       name = name || "item";
       this.name = name; // base name without definite/indefinite articles, lower case if possible.  try to make it unique.
       world.add(this);
-      this.location = null; // optional Item representing the location of this item (part of the state)
       this.description = null; // optional string representing the verbose/examine description of the item.
       this.keywords = [this.name]; // list of words to identify this item.  try to make them unique.        
       this.definiteName = 'the ' + this.name; // definite version of the name
       this.indefiniteName = (this.name.charAt(0).toLowerCase() in vowelset ? "an " : "a ") + this.name;
       this.canBeTaken = true; // can you pick this up? 	  
-      this.beUsed = function() {
-        return "You can't use " + this.definiteName + ".";
-      };
+      this.location = null; // optional Item representing the location of this item (part of the state)
       this.known = false; // part of the state
-      
-	  this.beExaminedBy = function(subject) {
+      this.hidden = false; // if it is hidden, you can't see it even if you're in the same room with it.
+      this.beExaminedBy = function(subject) {
         var ret = this.description || 'It\'s just ' + this.indefiniteName + '.';
         return ret;
       };
-	  
       // copy the state of this item into a string
       this.serialize = function() {
         //TODO			
@@ -216,7 +210,7 @@
       this.canBeTaken = false; // by default you can't pick up a place
       this.exits = {}; // a list of mapping from directions to other Places (uh, directions are strings?)
       this.beExaminedBy = function(subject) {
-        var _this = this;
+        var place = this;
         var ret = titleCase(this.name) + '\n' + (this.description || '') + ' ';
         if (this.exits && Object.keys(this.exits).length > 0) {
           var es = Object.keys(this.exits);
@@ -227,10 +221,13 @@
           ret += '.';
         }
         var items = world.items.filter(function(it) {
-          return it !== subject && it.location === _this;
+          return it !== subject && it.location === place && !it.hidden;
         });
         items.forEach(function(i) {
           i.known = true;
+        });
+        items = items.filter(function(it) {
+          return !(it.unlisted)
         });
         if (items.length > 0) {
           ret += ' ' + capitalize(series(items.map(function(x) {
@@ -240,20 +237,17 @@
         return ret;
       };
     }
-
     // silly template language: 
     // "use ?i1" means "use" followed by an ITEM, to be passed as FIRST parameter to the function.
     // "give ?i1 to ?i2", means "give"
     // "go ?d1" // d means DIRECTION
     // command structure
-
     function You(name) {
       name = name || "you";
       Item.call(this, name);
       this.indefiniteName = name;
       this.definiteName = name;
       this.canBeTaken = false; // by default you can't pick up yourself
-
       var move = function move(dir) {
         if (!this.location || !this.location.exits || !(dir in this.location.exits)) {
           return "You can't go " + dir + " from here.";
@@ -261,22 +255,19 @@
         this.location = this.location.exits[dir];
         return this.look();
       };
-      move.templates = ['?d1', 'go ?d1', 'move ?d1', 'walk ?d1'];
+      move.templates = ['go ?d1', '?d1', 'move ?d1', 'walk ?d1'];
       move.help = 'Go in the specified direction, like North or South.';
       this.move = move;
-	  
-	  var climb = function () {
-		 return this.move('up');
-	  };
-	  climb.templates = ['climb', 'climb up'];
-	  this.climb = climb;
-	  
-	  var climbDown = function () {
-		return this.move('down');
-	  };
-	  climbDown.templates = ['climb down'];
-	  this.climbDown = climbDown;
-
+      var climb = function() {
+        return this.move('up');
+      };
+      climb.templates = ['climb', 'climb up'];
+      this.climb = climb;
+      var climbDown = function() {
+        return this.move('down');
+      };
+      climbDown.templates = ['climb down'];
+      this.climbDown = climbDown;
       var look = function look() {
         this.location.known = true;
         return this.location.beExaminedBy(this);
@@ -284,15 +275,12 @@
       look.templates = ['look', 'l'];
       look.help = 'Look around you.';
       this.look = look;
-
       this.canSee = function(item) {
-        return item.location === this.location || item === this.location || item.location === this;
+        return !item.hidden && (item.location === this.location || item === this.location || item.location === this);
       };
-
       this.has = function(item) {
-        return item.location === this;
+        return !item.hidden && (item.location === this);
       };
-
       var take = function take(item) {
         if (!this.canSee(item)) {
           return "You can't see " + item.definiteName + " here.";
@@ -300,7 +288,7 @@
         if (!item.canBeTaken) {
           return "You can't pick up " + item.definiteName + ".";
         }
-        if (this === item.location) {
+        if (this.has(item)) {
           return "You already have " + item.definiteName + ".";
         }
         item.location = this;
@@ -309,9 +297,8 @@
       take.templates = ['take ?i1', 't ?i1', 'get ?i1', 'pick up ?i1', 'pickup ?i1', 'pick ?i1 up'];
       take.help = 'Pick up an item.';
       this.take = take;
-
       var drop = function drop(item) {
-        if (this !== item.location) {
+        if (!this.has(item)) {
           return "You don't have " + item.definiteName + ".";
         }
         item.location = this.location;
@@ -322,11 +309,10 @@
       ];
       drop.help = 'Put down an item.';
       this.drop = drop;
-
       var inventory = function inventory() {
-        var _this2 = this;
-        var items = world.items.filter(function(i) {
-          return i.location === _this2;
+        var subject = this;
+        var items = world.items.filter(function(item) {
+          return subject.has(item);
         }).map(function(i) {
           return i.indefiniteName;
         });
@@ -336,7 +322,6 @@
       inventory.templates = ['inventory', 'i'];
       inventory.help = 'List the items in your possession.';
       this.inventory = inventory;
-
       var help = function help() {
         var ret = '';
         ret += 'Need help?  Here are some commands:\n';
@@ -346,7 +331,6 @@
           var shortcut = c.templates.find(function(t) {
             return t.split(/\s+/)[0].length == 1;
           });
-
           return '"' + c.templates[0].toLowerCase().split(/\s+/).map(function(x) {
             return x.startsWith('?i') ? '[ITEM]' : x.startsWith('?d') ? '[DIRECTION]' : capitalize(x);
           }).join(' ') + '": ' + c.help + (shortcut ? ' (Shortcut: "' + shortcut.charAt(0).toUpperCase() + '")' :
@@ -358,24 +342,20 @@
       help.templates = ['help', 'h', 'help me'];
       help.help = 'Read these words.';
       this.help = help;
-
       this.commands = function() {
         return Object.values(this).filter(function(v) {
           return typeof v == 'function' && 'templates' in v && v.templates.length > 0;
         });
       };
-
-      this.addCommand = function(subjectCommandName, objectCommandName, templates, help, mustSee, mustHave) {
+      this.addCommand = function(subjectCommandName, objectCommandName, templates, help, withoutSeeing) {
         var command = function command(object) {
-
-          if (mustSee && !this.canSee(object)) {
+          if (!withoutSeeing && !this.canSee(object)) {
             return "You can't see " + object.definiteName + " here.";
           }
-          if (mustHave && !this.has(object)) {
-            return "You don't have " + object.definiteName + '.';
-          }
           if (!(objectCommandName in object)) {
-		    return "You can't "+subjectCommandName.toLowerCase()+" "+object.definiteName+".";           
+            // okay let's use the first template
+            var commandName = templates[0].split(/\s+/)[0].toLowerCase();
+            return "You can't " + commandName + " " + object.definiteName + ".";
           }
           var args = Array.from(arguments);
           args[0] = this;
@@ -387,12 +367,11 @@
         }
         this[subjectCommandName] = command;
       };
-	  
-	  this.addCommand('examine','beExaminedBy',['examine ?i1', 'x ?i1', 'look ?i1', 'look at ?i1', 'l ?i1', 'l at ?i1'],
-		'Examine an item.', true);
-	  
+      this.addCommand('examine', 'beExaminedBy', ['examine ?i1', 'x ?i1', 'look ?i1', 'look at ?i1', 'l ?i1',
+          'l at ?i1'
+        ],
+        'Examine an item.');
     }
-
     // parsing the input...command and an arity:  
     // 0: VERB
     // 1: VERB (PREPOSITION) OBJECT
@@ -411,7 +390,6 @@
       str = str.replace(/\bplease( |$)/g, '').trim(); // no need to be polite 
       // sort templates by length
       if (!interpretInput.templates) {
-
         interpretInput.templates = flatten(you.commands().map(function(c) {
           return c.templates.map(function(t) {
             return {
@@ -525,7 +503,6 @@
         remainder: str.substring(found.keyword.length).trim()
       };
     }
-
     var blankResponses = ["What?", "Come again?", "Sorry, I didn't hear you.", "Did you say something?",
       "Are you confused?  Type \"help\" for help.", "I don't follow.", "You should probably type something.",
       "Sorry, I don't speak mime.", "Try using words to express yourself.",
@@ -546,10 +523,8 @@
         if (!curBlankResponses.length) curBlankResponses = blankResponses.slice();
         return curBlankResponses.splice(Math.floor(Math.random() * curBlankResponses.length), 1)[0];
       }
-
       return "Sorry, I don't understand \"" + str + "\". Type \"help\" for help.";
     }
-
     // NEVER ALLOW THE FOCUS TO LEAVE THE INPUT BOX!  (seems evil)
     $('#input').blur(function() {
       window.setTimeout(function() {
@@ -643,12 +618,10 @@
     ///////////// SPECIFIC STUFF /////////////////
     // YOU
     var you = new You();
-
-	you.addCommand('use', 'beUsedBy', ['use ?i1'], 'Use an item in some way.', true);
-    you.addCommand('read', 'beReadBy', ['read ?i1'], 'Read something.', true);
-    you.addCommand('eat', 'beEatenBy', ['eat ?i1'], null, true, true);
-	you.addCommand('open', 'beOpenedBy', ['open ?i1'], null, true);
-
+    you.addCommand('use', 'beUsedBy', ['use ?i1', 'use ?i1 with ?i2', 'use ?i1 on ?i2'], 'Use an item in some way.');
+    you.addCommand('read', 'beReadBy', ['read ?i1'], 'Read something.');
+    you.addCommand('eat', 'beEatenBy', ['eat ?i1']);
+    you.addCommand('open', 'beOpenedBy', ['open ?i1', 'open ?i1 with ?i2', 'use ?i2 to open ?i1', 'open ?i1 using ?i2']);
     // PLACES
     var room = new Place("room");
     room.description = 'You are standing in a room with four walls, no furniture, and no windows.';
@@ -683,13 +656,27 @@
     pit.exits = {
       'up': tunnel
     };
-
     // ITEMS
+    var canOpener = new Item("can opener");
+    canOpener.keywords.push('can opener', 'opener');
+    canOpener.location = tunnel;
+    canOpener.beUsedBy = function(subject, object) {
+      if (!object) {
+        if (subject.has(soup)) {
+          return subject.open(soup, this);
+        }
+        if (!subject.has(this)) {
+          return "You don't have " + this.definiteName + ".";
+        }
+        return "You can't use " + this.definiteName + " now.";
+      }
+      return subject.open(object, this);
+    };
     var soup = new Item("can of soup");
     soup.keywords.push('can', 'soup', 'soup can', 'soupcan');
     soup.location = closet;
     soup.closed = true;
-    soup.full = true;    
+    soup.full = true;
     soup.beExaminedBy = function(subject) {
       if (!subject.has(this)) {
         return "It just looks like a can of soup from here.  Maybe you can examine it more closely if you pick it up.";
@@ -704,17 +691,25 @@
       }
       return ret;
     };
-	soup.beOpenedBy = function(subject) {
-		if (!subject.has(this)) {
-			return "You don't have " + this.definiteName + ".";
-		}
-		if (!this.closed) {
-			return "It's already been opened.";
-		}
-		this.closed = false;
-		return "You rip the soup can open with your bare hands, somehow.";
-		
-	}
+    soup.beOpenedBy = function(subject, instrument) {
+      if (!subject.has(this)) {
+        return "You don't have " + this.definiteName + ".";
+      }
+      if (!this.closed) {
+        return capitalize(this.definiteName) + " has already been opened.";
+      }
+      if (!instrument) {
+        return "You try to rip the soup can open with your bare hands, but you can't.";
+      }
+      if (instrument !== canOpener) {
+        return "You can't use " + instrument.definiteName + " to open " + this.definiteName + ".";
+      }
+      if (!subject.has(instrument)) {
+        return "You don't have " + instrument.definiteName + ".";
+      }
+      this.closed = false;
+      return "You successfully use " + instrument.definiteName + " to open " + this.definiteName + ".";
+    }
     soup.beReadBy = function(subject) {
       if (!subject.has(this)) {
         return "It looks like there's writing on it, but you can't read it from here.";
@@ -723,19 +718,22 @@
         '"NASS-TEE Split Pea Soup\n\n  If you like squished-up peas, you\'re sure to love these!\n' +
         '  Plop it in a bowl, or eat the can whole!\n' + '  It goes in as soup, but comes out as "';
     };
-    soup.beUsedBy = function(subject) {
+    soup.beUsedBy = function(subject, instrument) {
       if (!subject.has(this)) {
         return "You don't have " + this.definiteName + ".";
       }
       if (this.closed) {
-        return this.beOpenedBy(subject);
+        return this.beOpenedBy(subject, instrument);
       }
       if (!this.full) {
         return "You can't use the empty soup can.";
       }
-      return this.beEatenBy(subject);
+      return this.beEatenBy(subject, instrument);
     };
     soup.beEatenBy = function(subject) {
+      if (!subject.has(this)) {
+        return "You have to pick up " + this.definiteName + " to eat it.";
+      }
       if (this.closed) {
         return "You can't eat the sealed can.";
       }
@@ -745,7 +743,6 @@
       }
       return "You can't eat it; the can is empty.";
     };
-
     var note = new Item("note");
     note.location = pit;
     note.beExaminedBy = function(subject) {
@@ -762,17 +759,14 @@
         "\"Dear Mom,\n\nPlease do not eat the yummy NASS-TEE Split Pea Soup. I am saving it for dinner.\n" +
         "Love,\nElla.\"";
     };
-
     var bed = new Item("bed");
     bed.location = bedroom;
+    bed.unlisted = true;
     bed.beExaminedBy = function(subject) {
-      //TODO find better way to hide stuff than this
-      var ret = 'The bed is huge with a purple blanket and pink pillows.';
-      if (teddyBear.location === bed) {
-        teddyBear.location = bed.location;
-        teddyBear.known = true;
-      }
+      var ret = 'The bed is huge with pink blankets and purple pillows.';
       if (teddyBear.location === bed.location) {
+        teddyBear.hidden = false; // reveal the teddy bear
+        teddyBear.known = true;
         ret += ' There is a teddy bear on the bed.';
       }
       return ret;
@@ -783,7 +777,8 @@
     };
     var teddyBear = new Item("teddy bear");
     teddyBear.keywords = ['teddy bear', 'teddybear', 'teddy', 'bear'];
-    teddyBear.location = bed;
+    teddyBear.location = bedroom;
+    teddyBear.hidden = true;
   </script>
 </body>
 
