@@ -248,23 +248,23 @@
       this.indefiniteName = name;
       this.definiteName = name;
       this.canBeTaken = false; // by default you can't pick up yourself
-      var move = function move(dir) {
+      var go = function (dir) {
         if (!this.location || !this.location.exits || !(dir in this.location.exits)) {
           return "You can't go " + dir + " from here.";
         }
         this.location = this.location.exits[dir];
         return this.look();
       };
-      move.templates = ['go ?d1', '?d1', 'move ?d1', 'walk ?d1'];
-      move.help = 'Go in the specified direction, like North or South.';
-      this.move = move;
+      go.templates = ['go ?d1', '?d1', 'move ?d1', 'walk ?d1'];
+      go.help = 'Go in the specified direction, like North or South.';
+      this.go = go;
       var climb = function() {
-        return this.move('up');
+        return this.go('up');
       };
       climb.templates = ['climb', 'climb up'];
       this.climb = climb;
       var climbDown = function() {
-        return this.move('down');
+        return this.go('down');
       };
       climbDown.templates = ['climb down'];
       this.climbDown = climbDown;
@@ -622,11 +622,14 @@
     you.addCommand('read', 'beReadBy', ['read ?i1'], 'Read something.');
     you.addCommand('eat', 'beEatenBy', ['eat ?i1']);
     you.addCommand('open', 'beOpenedBy', ['open ?i1', 'open ?i1 with ?i2', 'use ?i2 to open ?i1', 'open ?i1 using ?i2']);
+	you.addCommand('move', 'beMovedBy', ['move ?i1']);
+	you.addCommand('push', 'bePushedBy', ['push ?i1', 'shove ?i1']);
     // PLACES
     var room = new Place("room");
     room.description = 'You are standing in a room with four walls, no furniture, and no windows.';
     var closet = new Place("closet");
-    closet.description = 'You are standing inside of a closet. It is dim in here.';
+    closet.description = 'You are standing inside of a closet. It is dim in here.  There is a heavy '+
+	  'boulder up against the eastern wall.';
     var tunnel = new Place("underground tunnel");
     tunnel.description = 'You find yourself in an underground tunnel that you can stand in and walk. ' +
       'The walls of the tunnel are made out of stone.';
@@ -646,8 +649,8 @@
       'north': room
     };
     closet.exits = {
-      'south': room,
-      'east': tunnel
+      'south': room//,
+//      'east': tunnel
     };
     tunnel.exits = {
       'west': closet,
@@ -779,6 +782,30 @@
     teddyBear.keywords = ['teddy bear', 'teddybear', 'teddy', 'bear'];
     teddyBear.location = bedroom;
     teddyBear.hidden = true;
+	var boulder = new Item("boulder");
+	boulder.keywords = ['boulder', 'bolder', 'rock', 'heavy boulder'];
+	boulder.location = closet;
+	boulder.unlisted = true;
+	boulder.canBeTaken = false;
+	boulder.budged = false;	
+	boulder.description = "This boulder is much too heavy for you to pick up.  "+
+	  "You might be able to move it a little, but that's about it.";
+	boulder.beMovedBy = function(subject) {
+		var ret = "";
+		if (!boulder.budged) {
+			boulder.budged = true;
+			this.location.exits.east = tunnel;						
+			return "You bend down and push the boulder as hard as you can.  At first, it won't budge. "+
+			  "Finally, it starts moving along the wall, little by little.  Eventually you push it into "+
+			  "the corner where it stays.  You can't move it any further, and now you're sweaty and tired. "+
+			  "Why did you do this again?\n\nAnnoyed with yourself, you step back form the boulder and stand "+			  
+			  "up again... to see that the boulder had been blocking an exit on the eastern wall, which is now "+
+			  "revealed!"
+		}
+		return "The boulder is completely wedged in the corner now.  It's not going anywhere.";
+	}
+	boulder.bePushedBy = boulder.beMovedBy;
+	
   </script>
 </body>
 
