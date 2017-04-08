@@ -48,10 +48,13 @@
       overflow: auto;
     }
 
-    .output-span {
+    .output-text {
       color: #ff0;
     }
 
+    .error-text {
+      color: #f00;
+    }
 
     .input-line {
       display: flex;
@@ -86,22 +89,20 @@
       <input type="text" id="input">
     </form>
     <div class="output" id="output">
-      <span class="filler output-span"></span>
+      <span class="filler output-text"></span>
     </div>
   </div>
 
   <script>
     "use strict";
-    //TODO scroll history
-    //TODO climb = "go up" ?
     //TODO FUTURE "you" should be more general
     //TODO state storage
     //TODO flesh out exits: description, hidden, etc
     //TODO "put ___ in/on ____"
     //TODO "use ___ with _____"
-    //TODO items: visible,hidden,already described in the room, etc.
     //TODO default bidirectional exits.
     //TODO limit to inventory?
+    //TODO "jump"
     // helper objects and functions 
     function moveCaretToEnd(el) {
       if (typeof el.selectionStart == "number") {
@@ -190,9 +191,64 @@
       this.location = null; // optional Item representing the location of this item (part of the state)
       this.known = false; // part of the state
       this.hidden = false; // if it is hidden, you can't see it even if you're in the same room with it.
+      this.exits = {}; // a list of mapping from directions to other places (uh, directions are strings?)
       this.beExaminedBy = function(subject) {
-        var ret = this.description || 'It\'s just ' + this.indefiniteName + '.';
+        var here = this;
+        var ret = '';
+        if (subject.location === here) {
+          titleCase(this.name) + '\n';
+        }
+        ret += (this.description || 'It\s just ' + this.indefiniteName + '.');
+        if (this.exits && Object.keys(this.exits).length > 0) {
+          var es = Object.keys(this.exits);
+          if (subject.location === here) {
+            ret += ' There ';
+            ret += es.length == 1 ? 'is an exit' : 'are exits';
+          } else {
+            ret += ' It has ';
+            ret += es.length == 1 ? 'an exit' : 'exits';
+          }
+          ret += ' leading ';
+          ret += series(es);
+          ret += '.';
+        }
+        var items = world.items.filter(function(it) {
+          return it !== subject && it.location === here && !it.hidden;
+        });
+        items.forEach(function(i) {
+          i.known = true;
+        });
+        items = items.filter(function(it) {
+          return !(it.unlisted)
+        });
+        items = items.map(function(it) {
+          return it.indefiniteName;
+        });
+        if (items.length > 0) {
+          if (subject.location === here) {
+            ret += ' ' + capitalize(series(items)) + (items.length > 1 ? ' are' : ' is') + ' here.';
+          } else {
+            ret += ' It contains ' + series(items) + '.';
+          }
+        }
         return ret;
+      };
+      this.ultimatelyContains = function(item) {
+        for (var loc = item.location; loc; loc = loc.location) {
+          if (loc === this) return true;
+        }
+        return false;
+      };
+      this.ultimateLocation = function() {
+        for (var loc = this; loc.location; loc = loc.location);
+        return loc;
+        // TODO INFINITE LOOP POSSIBILITY
+      };
+      this.canSee = function(item) {
+        return !item.hidden && (this.ultimateLocation() === item.ultimateLocation());
+      };
+      this.has = function(item) {
+        return !item.hidden && (this.ultimatelyContains(item));
       };
       // copy the state of this item into a string
       this.serialize = function() {
@@ -208,39 +264,7 @@
       name = name || "place";
       Item.call(this, name);
       this.canBeTaken = false; // by default you can't pick up a place
-      this.exits = {}; // a list of mapping from directions to other Places (uh, directions are strings?)
-      this.beExaminedBy = function(subject) {
-        var place = this;
-        var ret = titleCase(this.name) + '\n' + (this.description || '') + ' ';
-        if (this.exits && Object.keys(this.exits).length > 0) {
-          var es = Object.keys(this.exits);
-          ret += 'There ';
-          ret += es.length == 1 ? 'is an exit' : 'are exits';
-          ret += ' leading ';
-          ret += series(es);
-          ret += '.';
-        }
-        var items = world.items.filter(function(it) {
-          return it !== subject && it.location === place && !it.hidden;
-        });
-        items.forEach(function(i) {
-          i.known = true;
-        });
-        items = items.filter(function(it) {
-          return !(it.unlisted)
-        });
-        if (items.length > 0) {
-          ret += ' ' + capitalize(series(items.map(function(x) {
-            return x.indefiniteName;
-          }))) + (items.length > 1 ? ' are' : ' is') + ' here.';
-        }
-        return ret;
-      };
     }
-    // silly template language: 
-    // "use ?i1" means "use" followed by an ITEM, to be passed as FIRST parameter to the function.
-    // "give ?i1 to ?i2", means "give"
-    // "go ?d1" // d means DIRECTION
     // command structure
     function You(name) {
       name = name || "you";
@@ -248,7 +272,7 @@
       this.indefiniteName = name;
       this.definiteName = name;
       this.canBeTaken = false; // by default you can't pick up yourself
-      var go = function (dir) {
+      var go = function(dir) {
         if (!this.location || !this.location.exits || !(dir in this.location.exits)) {
           return "You can't go " + dir + " from here.";
         }
@@ -275,12 +299,6 @@
       look.templates = ['look', 'l'];
       look.help = 'Look around you.';
       this.look = look;
-      this.canSee = function(item) {
-        return !item.hidden && (item.location === this.location || item === this.location || item.location === this);
-      };
-      this.has = function(item) {
-        return !item.hidden && (item.location === this);
-      };
       var take = function take(item) {
         if (!this.canSee(item)) {
           return "You can't see " + item.definiteName + " here.";
@@ -347,9 +365,9 @@
           return typeof v == 'function' && 'templates' in v && v.templates.length > 0;
         });
       };
-      this.addCommand = function(subjectCommandName, objectCommandName, templates, help, withoutSeeing) {
+      this.addCommand = function(subjectCommandName, objectCommandName, templates, help) {
         var command = function command(object) {
-          if (!withoutSeeing && !this.canSee(object)) {
+          if (!this.canSee(object)) {
             return "You can't see " + object.definiteName + " here.";
           }
           if (!(objectCommandName in object)) {
@@ -576,10 +594,11 @@
       output('Welcome to the game.\n\n' + you.look() + '\n');
     });
 
-    function output(str) {
+    function output(str, classNames) {
+      classNames = classNames || 'output-text';
       $('#output').queue(function(next) {
         //console.log(str);
-        var outputSpan = $('<span class="output-span">');
+        var outputSpan = $('<span>').addClass(classNames);
         outputSpan.text(str + '\n');
         var o = $('#output');
         o.scrollTop(o.get(0).scrollHeight);
@@ -603,33 +622,38 @@
     }
 
     function processInput() {
-      var inputText = $('#input').val();
-      commandHistory.add(inputText);
-      $('#input').val('');
-      var inputSpan = $('<span>');
-      inputSpan.text(">>\xA0" + inputText + '\n');
-      $('#output').queue(function(next) {
-        $('#output').append(inputSpan);
-        next();
-      });
-      var outputText = respond(inputText);
-      output(outputText + '\n');
+      try {
+        var inputText = $('#input').val();
+        commandHistory.add(inputText);
+        $('#input').val('');
+        output('>>\xA0' + inputText, 'input-text');
+        var outputText = respond(inputText);
+        output(outputText + '\n');
+      } catch (e) {
+        output('ERROR: ' + JSON.stringify(e, Object.getOwnPropertyNames(e)) + '\n', 'error-text');
+        if ("console" in window) console.log(e);
+      }
     }
     ///////////// SPECIFIC STUFF /////////////////
     // YOU
     var you = new You();
+    // silly template language: 
+    // "use ?i1" means "use" followed by an ITEM, to be passed as FIRST parameter to the function.
+    // "give ?i1 to ?i2", means "give"
+    // "go ?d1" // d means DIRECTION
     you.addCommand('use', 'beUsedBy', ['use ?i1', 'use ?i1 with ?i2', 'use ?i1 on ?i2'], 'Use an item in some way.');
     you.addCommand('read', 'beReadBy', ['read ?i1'], 'Read something.');
     you.addCommand('eat', 'beEatenBy', ['eat ?i1']);
     you.addCommand('open', 'beOpenedBy', ['open ?i1', 'open ?i1 with ?i2', 'use ?i2 to open ?i1', 'open ?i1 using ?i2']);
-	you.addCommand('move', 'beMovedBy', ['move ?i1']);
-	you.addCommand('push', 'bePushedBy', ['push ?i1', 'shove ?i1']);
+    you.addCommand('move', 'beMovedBy', ['move ?i1']);
+    you.addCommand('push', 'bePushedBy', ['push ?i1', 'shove ?i1', 'press ?i1', 'push on ?i1', 'press on ?i1']);
+    you.addCommand('pull', 'bePulledBy', ['pull ?i1', 'tug ?i1', 'yank ?i1', 'pull on ?i1', 'tug on ?i1', 'yank on ?i1']);
     // PLACES
     var room = new Place("room");
     room.description = 'You are standing in a room with four walls, no furniture, and no windows.';
     var closet = new Place("closet");
-    closet.description = 'You are standing inside of a closet. It is dim in here.  There is a heavy '+
-	  'boulder up against the eastern wall.';
+    closet.description = 'You are standing inside of a closet. It is dim in here.  There is a heavy ' +
+      'boulder up against the eastern wall.';
     var tunnel = new Place("underground tunnel");
     tunnel.description = 'You find yourself in an underground tunnel that you can stand in and walk. ' +
       'The walls of the tunnel are made out of stone.';
@@ -649,8 +673,8 @@
       'north': room
     };
     closet.exits = {
-      'south': room//,
-//      'east': tunnel
+      'south': room //,
+      //      'east': tunnel
     };
     tunnel.exits = {
       'west': closet,
@@ -782,49 +806,46 @@
     teddyBear.keywords = ['teddy bear', 'teddybear', 'teddy', 'bear'];
     teddyBear.location = bedroom;
     teddyBear.hidden = true;
-	teddyBear.beExaminedBy = function(subject) {
-    
+    teddyBear.beExaminedBy = function(subject) {
       if (!subject.has(teddyBear)) {
         return 'The teddy bear is brown and wearing green overalls. You can\'t tell anything else about it from here.';
       }
-      var ret = 'The teddy bear is brown and furry.  '+
-      'It is wearing green corduroy overalls with a pocket in the front.';
-       if (key.location === this) {
-          ret += ' As you turn the bear over in your hands, a key falls out of the pocket onto the ground.';      
-          key.location = subject.location;
-          key.known = true;
-        }
-        return ret;
+      var ret = 'The teddy bear is brown and furry.  ' +
+        'It is wearing green corduroy overalls with a pocket in the front.';
+      if (key.location === this) {
+        ret += ' As you turn the bear over in your hands, a key falls out of the pocket onto the ground.';
+        key.location = subject.location;
+        key.known = true;
+      }
+      return ret;
     }
-        
     var key = new Item("key");
     key.keywords = ['key'];
-    key.location = teddyBear;   
-    
+    key.location = teddyBear;
     var boulder = new Item("boulder");
-	boulder.keywords = ['boulder', 'bolder', 'rock', 'heavy boulder'];
-	boulder.location = closet;
-	boulder.unlisted = true;
-	boulder.canBeTaken = false;
-	boulder.budged = false;	
-	boulder.description = "This boulder is much too heavy for you to pick up.  "+
-	  "You might be able to move it a little, but that's about it.";
-	boulder.beMovedBy = function(subject) {
-		var ret = "";
-		if (!boulder.budged) {
-			boulder.budged = true;
-			this.location.exits.east = tunnel;						
-			return "You bend down and push the boulder as hard as you can.  At first, it won't budge. "+
-			  "Finally, it starts moving along the wall, little by little.  Eventually you push it into "+
-			  "the corner where it stays.  You can't move it any further, and now you're sweaty and tired. "+
-			  "Why did you do this again?\n\nAnnoyed with yourself, you step back from the boulder and stand "+			  
-			  "up again... to see that the boulder had been blocking an exit on the eastern wall, which is now "+
-			  "revealed!"
-		}
-		return "The boulder is completely wedged in the corner now.  It's not going anywhere.";
-	}
-	boulder.bePushedBy = boulder.beMovedBy;
-	
+    boulder.keywords = ['boulder', 'bolder', 'rock', 'heavy boulder'];
+    boulder.location = closet;
+    boulder.unlisted = true;
+    boulder.canBeTaken = false;
+    boulder.budged = false;
+    boulder.description = "This boulder is much too heavy for you to pick up.  " +
+      "You might be able to move it a little, but that's about it.";
+    boulder.beMovedBy = function(subject) {
+      var ret = "";
+      if (!boulder.budged) {
+        boulder.budged = true;
+        this.location.exits.east = tunnel;
+        return "You bend down and push the boulder as hard as you can.  At first, it won't budge. " +
+          "Finally, it starts moving along the wall, little by little.  Eventually you push it into " +
+          "the corner where it stays.  You can't move it any further, and now you're sweaty and tired. " +
+          "Why did you do this again?\n\nAnnoyed with yourself, you step back from the boulder and stand " +
+          "up again... to see that the boulder had been blocking an exit on the eastern wall, which is now " +
+          "revealed!"
+      }
+      return "The boulder is completely wedged in the corner now.  It's not going anywhere.";
+    }
+    boulder.bePushedBy = boulder.beMovedBy;
+    boulder.bePulledBy = boulder.beMovedBy;
   </script>
 </body>
 
