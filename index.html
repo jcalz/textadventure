@@ -782,7 +782,26 @@
     teddyBear.keywords = ['teddy bear', 'teddybear', 'teddy', 'bear'];
     teddyBear.location = bedroom;
     teddyBear.hidden = true;
-	var boulder = new Item("boulder");
+	teddyBear.beExaminedBy = function(subject) {
+    
+      if (!subject.has(teddyBear)) {
+        return 'The teddy bear is brown and wearing green overalls. You can\'t tell anything else about it from here.';
+      }
+      var ret = 'The teddy bear is brown and furry.  '+
+      'It is wearing green corduroy overalls with a pocket in the front.';
+       if (key.location === this) {
+          ret += ' As you turn the bear over in your hands, a key falls out of the pocket onto the ground.';      
+          key.location = subject.location;
+          key.known = true;
+        }
+        return ret;
+    }
+        
+    var key = new Item("key");
+    key.keywords = ['key'];
+    key.location = teddyBear;   
+    
+    var boulder = new Item("boulder");
 	boulder.keywords = ['boulder', 'bolder', 'rock', 'heavy boulder'];
 	boulder.location = closet;
 	boulder.unlisted = true;
@@ -798,7 +817,7 @@
 			return "You bend down and push the boulder as hard as you can.  At first, it won't budge. "+
 			  "Finally, it starts moving along the wall, little by little.  Eventually you push it into "+
 			  "the corner where it stays.  You can't move it any further, and now you're sweaty and tired. "+
-			  "Why did you do this again?\n\nAnnoyed with yourself, you step back form the boulder and stand "+			  
+			  "Why did you do this again?\n\nAnnoyed with yourself, you step back from the boulder and stand "+			  
 			  "up again... to see that the boulder had been blocking an exit on the eastern wall, which is now "+
 			  "revealed!"
 		}
