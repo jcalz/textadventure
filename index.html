@@ -165,18 +165,6 @@
       });
     });
 
-
-    // newfunc takes an extra first parameter for superfunction
-    function override(object, funcname, newfunc) {
-        var superfunction = object[funcname].bind(object);
-        object[funcname] = function(){
-            var args = Array.from(arguments);
-            args.unshift(superfunction);
-            return newfunc.apply(object, args);
-        };
-    }    
-        
-
     // WORLD, GLOBAL VARIABLE
     var world = function() {
       var itemMap = {};
@@ -196,7 +184,8 @@
         },
         get itemMap() {
           return itemMap;
-        }
+        },
+        maxNesting: 256
       };
     }();
 
@@ -213,11 +202,31 @@
       this.known = false; // part of the state
       this.hidden = false; // if it is hidden, you can't see it even if you're in the same room with it.
       this.exits = {}; // a list of mapping from directions to other places (uh, directions are strings?)
+      
+      this.beTakenBy = function(subject) {
+        if (!this.canBeTaken) {
+          return "You can't pick up " + this.definiteName + ".";
+        }
+        if (subject.has(this)) {
+          return "You already have " + this.definiteName + ".";
+        }
+        this.location = subject;
+        return "You have picked up " + this.definiteName + ".";
+      };
+
+      this.beDroppedBy = function(subject) {
+        if (!subject.has(this)) {
+          return "You don't have " + this.definiteName + ".";
+        }
+        this.location = subject.location;
+        return "You have dropped " + this.definiteName + ".";
+      };
+      
       this.beExaminedBy = function(subject) {
         var here = this;
         var ret = '';
         if (subject.location === here) {
-          titleCase(this.name) + '\n';
+          ret += titleCase(this.name) + '\n';
         }
         ret += (this.description || 'It\s just ' + this.indefiniteName + '.');
         if (this.exits && Object.keys(this.exits).length > 0) {
@@ -234,7 +243,7 @@
           ret += '.';
         }
         var items = world.items.filter(function(it) {
-          return it !== subject && it.location === here && !it.hidden;
+          return it.location === here && !it.hidden;
         });
         items.forEach(function(i) {
           i.known = true;
@@ -254,16 +263,28 @@
         }
         return ret;
       };
+      
+      
       this.ultimatelyContains = function(item) {
+        var cnt=0;
         for (var loc = item.location; loc; loc = loc.location) {
+          cnt++;
+          if (cnt > world.maxNesting) {
+            throw new Error('Location nesting of more than '+world.maxNesting+' exceeded!');
+          }
           if (loc === this) return true;
         }
         return false;
       };
       this.ultimateLocation = function() {
-        for (var loc = this; loc.location; loc = loc.location);
+        var cnt=0;
+        for (var loc = this; loc.location; loc = loc.location) {
+           cnt++;
+           if (cnt > world.maxNesting) {
+            throw new Error('Location nesting of more than '+world.maxNesting+' exceeded!');
+          }
+        }
         return loc;
-        // TODO INFINITE LOOP POSSIBILITY
       };
       this.canSee = function(item) {
         return !item.hidden && (this.ultimateLocation() === item.ultimateLocation());
@@ -271,6 +292,18 @@
       this.has = function(item) {
         return !item.hidden && item.location===this; //(this.ultimatelyContains(item));
       };
+      this.appearsInInventoryOf = function(subject) {
+        return subject.has(this);    
+      };
+     
+      this.exitedBy = function(subject, dir) {
+        if (!this.exits || !(dir in this.exits)) {
+          return "You can't go " + dir + " from here.";
+        }
+        subject.location = this.exits[dir];
+        return subject.look();
+      };
+     
       // copy the state of this item into a string
       this.serialize = function() {
         //TODO			
@@ -279,6 +312,27 @@
       this.deserialize = function(state) {
         //TODO
       };
+    
+      // newfunc takes an extra first parameter for superfunction
+      this.extendMethod = function(methodName, newMethod) {
+        var object = this;
+        var superMethod = object[methodName].bind(object);
+        object[methodName] = function(){
+            var args = Array.from(arguments);
+            args.unshift(superMethod);
+            return newMethod.apply(object, args);
+        };
+        }   
+    
+       this.newBackgroundItem = function(name, keywords) {
+            var item = new Item(name);
+            if (keywords) item.keywords = keywords;
+            item.location = this;
+            item.unlisted = true;
+            item.canBeTaken = false;
+            return item;
+       };
+        
     }
 
     function Place(name) {
@@ -286,20 +340,41 @@
       Item.call(this, name);
       this.canBeTaken = false; // by default you can't pick up a place
     }
-    // command structure
-    function You(name) {
-      name = name || "you";
+    
+    function Person(name) {
+      name = name || "person";
       Item.call(this, name);
       this.indefiniteName = name;
       this.definiteName = name;
-      this.canBeTaken = false; // by default you can't pick up yourself
-      var go = function(dir) {
-        if (!this.location || !this.location.exits || !(dir in this.location.exits)) {
-          return "You can't go " + dir + " from here.";
+      this.canBeTaken = false; // can't pick up a person
+
+      this.addCommand = function(subjectCommandName, objectCommandName, templates, help) {
+        var command = function command(object) {
+          if (!this.canSee(object)) {
+            return "You can't see " + object.definiteName + " here.";
+          }
+          if (!(objectCommandName in object)) {
+            // okay let's use the first template
+            var commandName = templates[0].split(/\s+/)[0].toLowerCase();
+            return "You can't " + commandName + " " + object.definiteName + ".";
+          }
+          var args = Array.from(arguments);
+          args[0] = this;
+          return object[objectCommandName].apply(object, args);
+        };
+        command.templates = templates;
+        if (help) {
+          command.help = help;
         }
-        this.location = this.location.exits[dir];
-        return this.look();
+        this[subjectCommandName] = command;
       };
+      
+      var go = function(dir) {
+        if (!this.location) {
+            return "You can't go " + dir + " from here.";
+        }
+        return this.location.exitedBy(this, dir);
+      }
       go.templates = ['go ?d1', '?d1', 'move ?d1', 'walk ?d1'];
       go.help = 'Go in the specified direction, like North or South.';
       this.go = go;
@@ -308,11 +383,13 @@
       };
       climb.templates = ['climb', 'climb up'];
       this.climb = climb;
+      
       var climbDown = function() {
         return this.go('down');
       };
       climbDown.templates = ['climb down'];
       this.climbDown = climbDown;
+      
       var look = function look() {
         this.location.known = true;
         return this.location.beExaminedBy(this);
@@ -320,47 +397,28 @@
       look.templates = ['look', 'l'];
       look.help = 'Look around you.';
       this.look = look;
-      var take = function take(item) {
-        if (!this.canSee(item)) {
-          return "You can't see " + item.definiteName + " here.";
-        }
-        if (!item.canBeTaken) {
-          return "You can't pick up " + item.definiteName + ".";
-        }
-        if (this.has(item)) {
-          return "You already have " + item.definiteName + ".";
-        }
-        item.location = this;
-        return "You have picked up " + item.definiteName + ".";
-      };
-      take.templates = ['take ?i1', 't ?i1', 'get ?i1', 'pick up ?i1', 'pickup ?i1', 'pick ?i1 up'];
-      take.help = 'Pick up an item.';
-      this.take = take;
-      var drop = function drop(item) {
-        if (!this.has(item)) {
-          return "You don't have " + item.definiteName + ".";
-        }
-        item.location = this.location;
-        return "You have dropped " + item.definiteName + ".";
-      };
-      drop.templates = ['drop ?i1', 'dr ?i1', 'put down ?i1', 'put ?i1 down', 'let ?i1 go', 'let go of ?i1',
+
+     this.addCommand('take', 'beTakenBy', ['take ?i1', 't ?i1', 'get ?i1', 'pick up ?i1', 'pickup ?i1', 'pick ?i1 up'],
+        'Pick up an item.');  
+        
+     this.addCommand('drop','beDroppedBy', ['drop ?i1', 'dr ?i1', 'put down ?i1', 'put ?i1 down', 'let ?i1 go', 'let go of ?i1',
         'let go ?i1', 'release ?i1'
-      ];
-      drop.help = 'Put down an item.';
-      this.drop = drop;
+      ], 'Put down an item.');
+      
       var inventory = function inventory() {
         var subject = this;
         var items = world.items.filter(function(item) {
-          return subject.has(item);
+          return item.appearsInInventoryOf(subject);
         }).map(function(i) {
           return i.indefiniteName;
         });
         if (!items.length) return "You don't have anything.";
         return "You have " + series(items) + ".";
-      };
+      }
       inventory.templates = ['inventory', 'i'];
       inventory.help = 'List the items in your possession.';
       this.inventory = inventory;
+      
       var help = function help() {
         var ret = '';
         ret += 'Need help?  Here are some commands:\n';
@@ -386,37 +444,13 @@
           return typeof v == 'function' && 'templates' in v && v.templates.length > 0;
         });
       };
-      this.addCommand = function(subjectCommandName, objectCommandName, templates, help) {
-        var command = function command(object) {
-          if (!this.canSee(object)) {
-            return "You can't see " + object.definiteName + " here.";
-          }
-          if (!(objectCommandName in object)) {
-            // okay let's use the first template
-            var commandName = templates[0].split(/\s+/)[0].toLowerCase();
-            return "You can't " + commandName + " " + object.definiteName + ".";
-          }
-          var args = Array.from(arguments);
-          args[0] = this;
-          return object[objectCommandName].apply(object, args);
-        };
-        command.templates = templates;
-        if (help) {
-          command.help = help;
-        }
-        this[subjectCommandName] = command;
-      };
+
       this.addCommand('examine', 'beExaminedBy', ['examine ?i1', 'x ?i1', 'look ?i1', 'look at ?i1', 'l ?i1',
           'l at ?i1'
         ],
         'Examine an item.');
     }
-    // parsing the input...command and an arity:  
-    // 0: VERB
-    // 1: VERB (PREPOSITION) OBJECT
-    // 2: VERB OBJECT  OBJECT  
-    // give object object  
-    // parseItem(str) should return an item and the rest of the string.    
+
     function parseItem(str) {
       var ret = parseItemAndRemainder(str);
       if (!ret) return ret;
@@ -657,7 +691,11 @@
     }
     ///////////// SPECIFIC STUFF /////////////////
     // YOU
-    var you = new You();
+    var you = new Person('you');
+    you.keywords = ['me','myself','I'];
+    you.known = true;
+    you.unlisted = true;
+    
     // silly template language: 
     // "use ?i1" means "use" followed by an ITEM, to be passed as FIRST parameter to the function.
     // "give ?i1 to ?i2", means "give"
@@ -669,22 +707,29 @@
     you.addCommand('move', 'beMovedBy', ['move ?i1']);
     you.addCommand('push', 'bePushedBy', ['push ?i1', 'shove ?i1', 'press ?i1', 'push on ?i1', 'press on ?i1']);
     you.addCommand('pull', 'bePulledBy', ['pull ?i1', 'tug ?i1', 'yank ?i1', 'pull on ?i1', 'tug on ?i1', 'yank on ?i1']);
+    
     // PLACES
     var room = new Place("room");
     room.description = 'You are standing in a room with four walls, no furniture, and no windows.';
+    
     var closet = new Place("closet");
     closet.description = 'You are standing inside of a closet. It is dim in here.  There is a heavy ' +
       'boulder up against the eastern wall.';
+    
     var tunnel = new Place("underground tunnel");
     tunnel.description = 'You find yourself in an underground tunnel that you can stand in and walk. ' +
       'The walls of the tunnel are made out of stone.';
     tunnel.keywords.push('tunnel');
+    
     var pit = new Place("pit");
     pit.description =
       'You are now at the bottom of a pit.  This pit is very deep.  The walls of the pit are also made of stone.';
+    
     var bedroom = new Place("bedroom");
     bedroom.description = 'This room is big, with a huge bed covered in pink blankets.';
+    
     you.location = room;
+    
     // EXITS
     room.exits = {
       'north': closet,
@@ -704,6 +749,7 @@
     pit.exits = {
       'up': tunnel
     };
+    
     // ITEMS
     var canOpener = new Item("can opener");
     canOpener.keywords.push('can opener', 'opener');
@@ -720,6 +766,7 @@
       }
       return subject.open(object, this);
     };
+    
     var soup = new Item("can of soup");
     soup.keywords.push('can', 'soup', 'soup can', 'soupcan');
     soup.location = closet;
@@ -791,6 +838,7 @@
       }
       return "You can't eat it; the can is empty.";
     };
+    
     var note = new Item("note");
     note.location = pit;
     note.beExaminedBy = function(subject) {
@@ -807,6 +855,7 @@
         "\"Dear Mom,\n\nPlease do not eat the yummy NASS-TEE Split Pea Soup. I am saving it for dinner.\n" +
         "Love,\nElla.\"";
     };
+    
     var bed = new Item("bed");
     bed.location = bedroom;
     bed.unlisted = true;
@@ -823,6 +872,9 @@
     bed.beUsedBy = function(subject) {
       return "You lie down on the bed and fall asleep for a few minutes.  You wake up feeling refreshed.";
     };
+    bedroom.newBackgroundItem('pillow',['pillow','pillows']);
+    bedroom.newBackgroundItem('blanket',['blanket','blankets']);
+    
     var teddyBear = new Item("teddy bear");
     teddyBear.keywords = ['teddy bear', 'teddybear', 'teddy', 'bear'];
     teddyBear.location = bedroom;
@@ -845,6 +897,25 @@
     var key = new Item("key");
     key.keywords = ['key'];
     key.location = teddyBear;
+    
+    /*
+    var cabinet = new Item("cabinet");
+    cabinet.keywords = ['cabinet'];
+    cabinet.location = bedroom;
+    cabinet.locked = true;
+    cabinet.opened = false;
+    cabinet.beExaminedBy = function(subject) {
+        var ret = 'The cabinet is made out of wood.';
+        if (cabinet.locked) {
+            ret += ' It is closed and locked.';
+        } else if (cabinet.opened) {
+            ret += ' It is open.';
+        } else {
+            ret += ' It is closed and unlocked.';
+        }
+    };
+    // TODO cabinet is broken
+    */
     
     var boulder = new Item("boulder");
     boulder.keywords = ['boulder', 'bolder', 'rock', 'heavy boulder'];
@@ -871,18 +942,20 @@
     boulder.bePushedBy = boulder.beMovedBy;
     boulder.bePulledBy = boulder.beMovedBy;
   
+    
     /*
     var magicEye = new Item("magic eye");
     magicEye.keywords = ['eye','magic eye','magic'];
     magicEye.location = room;
-    
-    override(pit,'beExaminedBy',function(superfunction, subject) {
+    pit.extendMethod('beExaminedBy',function(superMethod, subject) {
         if (!subject.has(magicEye)) {
             return 'YOU CANNOT SEE ANYTHING, YOU NEED THE MAGIC EYE';
         }
-        return superfunction(subject);
+        return superMethod(subject);
     });
     */
+    
+    
     
   </script>
 </body>
