@@ -164,6 +164,19 @@
         dirs[v] = k;
       });
     });
+
+
+    // newfunc takes an extra first parameter for superfunction
+    function override(object, funcname, newfunc) {
+        var superfunction = object[funcname].bind(object);
+        object[funcname] = function(){
+            var args = Array.from(arguments);
+            args.unshift(superfunction);
+            return newfunc.apply(object, args);
+        };
+    }    
+        
+
     // WORLD, GLOBAL VARIABLE
     var world = function() {
       var itemMap = {};
@@ -256,7 +269,7 @@
         return !item.hidden && (this.ultimateLocation() === item.ultimateLocation());
       };
       this.has = function(item) {
-        return !item.hidden && (this.ultimatelyContains(item));
+        return !item.hidden && item.location===this; //(this.ultimatelyContains(item));
       };
       // copy the state of this item into a string
       this.serialize = function() {
@@ -821,15 +834,18 @@
       var ret = 'The teddy bear is brown and furry.  ' +
         'It is wearing green corduroy overalls with a pocket in the front.';
       if (key.location === this) {
-        ret += ' As you turn the bear over in your hands, a key falls out of the pocket onto the ground.';
-        key.location = subject.location;
+        //ret += ' As you turn the bear over in your hands, a key falls out of the pocket onto the ground.';
+        ret += ' You notice a key sticking out of the pocket.';
+        //key.location = subject.location;
         key.known = true;
       }
       return ret;
     }
+    
     var key = new Item("key");
     key.keywords = ['key'];
     key.location = teddyBear;
+    
     var boulder = new Item("boulder");
     boulder.keywords = ['boulder', 'bolder', 'rock', 'heavy boulder'];
     boulder.location = closet;
@@ -854,6 +870,20 @@
     }
     boulder.bePushedBy = boulder.beMovedBy;
     boulder.bePulledBy = boulder.beMovedBy;
+  
+    /*
+    var magicEye = new Item("magic eye");
+    magicEye.keywords = ['eye','magic eye','magic'];
+    magicEye.location = room;
+    
+    override(pit,'beExaminedBy',function(superfunction, subject) {
+        if (!subject.has(magicEye)) {
+            return 'YOU CANNOT SEE ANYTHING, YOU NEED THE MAGIC EYE';
+        }
+        return superfunction(subject);
+    });
+    */
+    
   </script>
 </body>
 
