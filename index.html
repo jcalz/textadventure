@@ -188,15 +188,15 @@
         commandHistory.add(inputText);
         $('#input').val('');
         output('>>\xA0' + inputText, 'input-text');
-        var outputText = Adventure.respond(subject, inputText);
+        var outputText = subject.adventure.respond(subject, inputText);
         output(outputText + '\n');
       } catch (e) {
         output('ERROR: ' + JSON.stringify(e, Object.getOwnPropertyNames(e)) + '\n', 'error-text');
         if ("console" in window) console.log(e);
       }
     }
-
-    $(function() {
+  
+    $(function() {    
       $('#adventure-form').submit(function() {
         processInput(you);
         return false;
@@ -205,10 +205,11 @@
       output("");
       output('Welcome to the game.\n\n' + you.look() + '\n');
     });
-
 	
     ///////////// SPECIFIC STUFF /////////////////
-    var you = new Adventure.Person('you');
+    var adventure = new Adventure();
+
+    var you = new adventure.Person('you');
     you.keywords = ['me', 'myself', 'I'];
     you.known = true;
     you.unlisted = true;
@@ -231,23 +232,23 @@
     you.addCommand('pull', 'bePulledBy', ['pull ?i1', 'tug ?i1', 'yank ?i1', 'pull on ?i1', 'tug on ?i1', 'yank on ?i1']);
 
     // PLACES
-    var room = new Adventure.Place("room");
+    var room = new adventure.Place("room");
     room.description = 'You are standing in a room with four walls, no furniture, and no windows.';
 
-    var closet = new Adventure.Place("closet");
+    var closet = new adventure.Place("closet");
     closet.description = 'You are standing inside of a closet. It is dim in here.  There is a heavy ' +
       'boulder up against the eastern wall.';
 
-    var tunnel = new Adventure.Place("underground tunnel");
+    var tunnel = new adventure.Place("underground tunnel");
     tunnel.description = 'You find yourself in an underground tunnel that you can stand in and walk. ' +
       'The walls of the tunnel are made out of stone.';
     tunnel.keywords.push('tunnel');
 
-    var pit = new Adventure.Place("pit");
+    var pit = new adventure.Place("pit");
     pit.description =
       'You are now at the bottom of a pit.  This pit is very deep.  The walls of the pit are also made of stone.';
 
-    var bedroom = new Adventure.Place("bedroom");
+    var bedroom = new adventure.Place("bedroom");
     bedroom.description = 'This room is big, with a huge bed covered in pink blankets.';
 
     you.location = room;
@@ -273,7 +274,7 @@
     };
 
     // ITEMS
-    var canOpener = new Adventure.Item("can opener");
+    var canOpener = new adventure.Item("can opener");
     canOpener.keywords.push('can opener', 'opener');
     canOpener.location = tunnel;
     canOpener.beUsedBy = function(subject, object) {
@@ -289,7 +290,7 @@
       return subject.open(object, this);
     };
 
-    var soup = new Adventure.Item("can of soup");
+    var soup = new adventure.Item("can of soup");
     soup.keywords.push('can', 'soup', 'soup can', 'soupcan');
     soup.location = closet;
     soup.closed = true;
@@ -313,7 +314,7 @@
         return "You don't have " + this.definiteName + ".";
       }
       if (!this.closed) {
-        return Adventure.capitalize(this.definiteName) + " has already been opened.";
+        return adventure.capitalize(this.definiteName) + " has already been opened.";
       }
       if (!instrument) {
         return "You try to rip the soup can open with your bare hands, but you can't.";
@@ -361,7 +362,7 @@
       return "You can't eat it; the can is empty.";
     };
 
-    var note = new Adventure.Item("note");
+    var note = new adventure.Item("note");
     note.location = pit;
     note.beExaminedBy = function(subject) {
       if (!subject.has(this)) {
@@ -378,7 +379,7 @@
         "Love,\nElla.\"";
     };
 
-    var bed = new Adventure.Item("bed");
+    var bed = new adventure.Item("bed");
     bed.location = bedroom;
     bed.unlisted = true;
     bed.beExaminedBy = function(subject) {
@@ -397,7 +398,7 @@
     bedroom.newBackgroundItem('pillow', ['pillow', 'pillows']);
     bedroom.newBackgroundItem('blanket', ['blanket', 'blankets']);
 
-    var teddyBear = new Adventure.Item("teddy bear");
+    var teddyBear = new adventure.Item("teddy bear");
     teddyBear.keywords = ['teddy bear', 'teddybear', 'teddy', 'bear'];
     teddyBear.location = bedroom;
     teddyBear.hidden = true;
@@ -414,7 +415,7 @@
       return ret;
     }
 
-    var key = new Adventure.Item("key");
+    var key = new adventure.Item("key");
     key.keywords = ['key'];
     key.location = teddyBear;
     key.beUsedBy = function(subject, object) {
@@ -429,7 +430,7 @@
       return "You try to use the key on " + object.definiteName + " but it doesn't do anything.";
     }
 
-    var cabinet = new Adventure.Item("cabinet");
+    var cabinet = new adventure.Item("cabinet");
     cabinet.keywords = ['cabinet'];
     cabinet.location = bedroom;
     cabinet.locked = true;
@@ -446,7 +447,7 @@
         if (items.length == 0) {
           ret += 'and empty.';
         } else {
-          ret += 'and contains ' + Adventure.series(items) + ".";
+          ret += 'and contains ' + adventure.series(items) + ".";
         }
       }
       return ret;
@@ -468,7 +469,7 @@
       return "You turn the key in the cabinet's lock until you hear a click.  The cabinet springs open!";
     }
 
-    var diary = new Adventure.Item("diary");
+    var diary = new adventure.Item("diary");
     diary.keywords = ['diary'];
     diary.location = cabinet;
     diary.description = 'The cover is labelled "Ella\'s Diary: PRIVATE, DO NOT READ!"';
@@ -481,7 +482,7 @@
         '   ... JOE DOESN\'T KNOW WHAT TO PUT HERE!';
     }
 
-    var boulder = new Adventure.Item("boulder");
+    var boulder = new adventure.Item("boulder");
     boulder.keywords = ['boulder', 'bolder', 'rock', 'heavy boulder'];
     boulder.location = closet;
     boulder.unlisted = true;
@@ -507,7 +508,7 @@
     boulder.bePulledBy = boulder.beMovedBy;
 
     /*
-    var magicEye = new Adventure.Item("magic eye");
+    var magicEye = new adventure.Item("magic eye");
     magicEye.keywords = ['eye','magic eye','magic'];
     magicEye.location = room;
     pit.extendMethod('beExaminedBy',function(superMethod, subject) {
