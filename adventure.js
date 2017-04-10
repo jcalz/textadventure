@@ -86,7 +86,17 @@ function Adventure() {
     this.definiteName = 'the ' + this.name; // definite version of the name
     this.indefiniteName = ('aeiou'.indexOf(this.name.charAt(0).toLowerCase()) >= 0 ? "an " : "a ") + this.name;
     this.canBeTaken = true; // can you pick this up? 	  
-    this.location = null; // optional Item representing the location of this item (part of the state)
+    
+    this.locationId = null;     
+    Object.defineProperty(this, 'location',{
+      get: function() {
+        return (this.locationId && (this.locationId in world.itemMap)) ? world.itemMap[this.locationId] : null;
+      },
+      set: function(location) {
+        this.locationId = (location && location.id) ? location.id : null;
+      }
+    });
+    
     this.known = false; // part of the state
     this.hidden = false; // if it is hidden, you can't see it even if you're in the same room with it.
     this.exits = {}; // a list of mapping from directions to other places (uh, directions are strings?)
