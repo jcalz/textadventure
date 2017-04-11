@@ -57,6 +57,10 @@
       color: #f00;
     }
 
+    .alert-text {
+      color: #f70;
+    }
+
     .input-line {
       display: flex;
       flex-flow: row nowrap;
@@ -96,6 +100,19 @@
 
   <script>
     "use strict";
+
+    function storageAvailable(type) {
+      try {
+        var storage = window[type],
+          x = '__storage_test__';
+        storage.setItem(x, x);
+        storage.removeItem(x);
+        return true;
+      } catch (e) {
+        return false;
+      }
+    }
+    var hasLocalStorage = storageAvailable('localStorage');
 
     // USER INTERFACE
     function moveCaretToEnd(el) {
@@ -182,30 +199,88 @@
       });
     }
 
-    function processInput(subject) {
+    function processInput(ioFunction) {
       try {
         var inputText = $('#input').val();
         commandHistory.add(inputText);
         $('#input').val('');
         output('>>\xA0' + inputText, 'input-text');
-        var outputText = subject.adventure.respond(subject, inputText);
+        var outputText = ioFunction(inputText);
         output(outputText + '\n');
       } catch (e) {
         output('ERROR: ' + JSON.stringify(e, Object.getOwnPropertyNames(e)) + '\n', 'error-text');
         if ("console" in window) console.log(e);
       }
     }
-  
-    $(function() {    
-      $('#adventure-form').submit(function() {
-        processInput(you);
-        return false;
-      });
+
+    function durationString(millis) {
+      if (millis < 0) return null;
+      var units = ['millisecond', 'second', 'minute', 'hour', 'day', 'week'];
+      var divisors = [1000, 60, 60, 24, 7, 3];
+      var t = millis;
+      for (var i = 0; i < units.length; i++) {
+        if (t < divisors[i]) {
+          t = Math.floor(t);
+          return t + ' ' + units[i] + (t == 1 ? '' : 's');
+        }
+        t = t / divisors[i];
+      }
+      return null;
+    };
+
+    $(function() {
+
+      var processInputNormally = function() {
+        $('#adventure-form').off('submit').submit(function() {
+          processInput(function(inputText) {
+            return you.adventure.respond(you, inputText);
+          });
+          if (hasLocalStorage) {
+            localStorage.setItem('autosave', adventure.serialize());
+            localStorage.setItem('autosave-time', Date.now());
+          }
+          return false;
+        });
+
+      }
+
+      if (previouslySavedState) {
+        output('\n!!!!!          PREVIOUS GAME AVAILABLE          !!!!!', 'alert-text');
+        var timestamp = parseInt(localStorage.getItem('autosave-time'), 10);
+        var ds = durationString(Date.now() - timestamp);
+        var when = (timestamp) ? ((ds) ? (ds + ' ago') : ('at ' + (new Date(timestamp)).toString())) : '';
+        output('It looks like you left a game in progress ' + when + '.');
+        output('Would you like to continue this game? Type "YES" or "NO".');
+        output('If you type "NO", the previous game will be erased.');
+        output('Type "YES" to continue the game or "NO" to start a new game.', 'alert-text');
+        $('#adventure-form').submit(function() {
+          processInput(function(inputText) {
+            var i = inputText.replace(/[\s"']/g, '').toLowerCase();
+            if ((i !== 'yes') && (i !== 'no'))
+              return 'Please type \"YES\" or \"NO\".';
+            var ret;
+            if (i === 'yes') {
+              adventure.deserialize(previouslySavedState);              
+              ret = '\n\n' + 'Okay, continuing the previous game...\n\n' + you.look();
+            } else {
+              ret = '\n\nOkay, starting a new game...\n\n' + you.start();
+              localStorage.removeItem('autosave');
+            }
+            processInputNormally();            
+            return ret;
+          });
+          return false;
+        });
+
+      } else {
+        output('\n' + you.start());
+        processInputNormally();
+      }
+
       $('#input').focus();
-      output("");
-      output('Welcome to the game.\n\n' + you.look() + '\n');
+
     });
-	
+
     ///////////// SPECIFIC STUFF /////////////////
     var adventure = new Adventure();
 
@@ -518,6 +593,23 @@
         return superMethod(subject);
     });
     */
+
+    var initialState = adventure.serialize();
+    var previouslySavedState = hasLocalStorage && localStorage.getItem('autosave');
+
+    var started = false;
+    you.start = function() {
+      var ret = "";
+      if (started) {
+        ret += "Okay, restarting the game from the beginning...\n\n";
+        adventure.deserialize(initialState);
+      }
+      started = true;
+      ret += "Welcome to the game.\n\n" + you.look();
+      return ret;
+    };
+    you.start.templates = ['restart the game'];
+    you.start.help = 'Go back to the beginning of the game.  Clears everything.  Be careful!';
   </script>
 </body>
 

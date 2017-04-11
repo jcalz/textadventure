@@ -1,5 +1,4 @@
 "use strict";
-//TODO state storage
 //TODO flesh out exits: description, hidden, etc
 //TODO "put ___ in/on ____"
 //TODO default bidirectional exits.
@@ -7,8 +6,10 @@
 //TODO "jump"
 
 function Adventure() {
-  
+
   var A = this;
+
+  A.maxNesting = 256;
 
   // Object.values polyfill
   var objectValues = Object.values || function(o) {
@@ -55,48 +56,56 @@ function Adventure() {
     });
   });
 
+  // KEEP A MAP OF ALL ITEMS IN THE ADVENTURE
   var itemMap = {};
-  var world = {
-    add: function add(item) {
-      var id = item.name.toLowerCase().replace(/[^a-z0-9_ ]/g, '').trim().replace(/\s+/g, '_');
-      var cnt = 0;
-      while (id in itemMap) {
-        id = id + "" + cnt;
-        cnt++;
-      }
-      itemMap[id] = item;
-      item.id = id;
-    },
-    get items() {
-      return objectValues(itemMap);
-    },
-    get itemMap() {
-      return itemMap;
-    },
-    maxNesting: 256
+  var addItem = function(item) {
+    var id = item.name.toLowerCase().replace(/[^a-z0-9_ ]/g, '').trim().replace(/\s+/g, '_');
+    var cnt = 0;
+    while (id in itemMap) {
+      id = id + "" + cnt;
+      cnt++;
+    }
+    itemMap[id] = item;
+    item.id = id;
+  }
+  var allItems = function() {
+    return objectValues(itemMap);
+  }
+
+  // serialize adventure
+  var serialize = function() {
+    var serializedMap = {};
+    Object.keys(itemMap).forEach(function(k) {
+      serializedMap[k] = itemMap[k].serialize();
+    });
+    return JSON.stringify(serializedMap);
   };
+  A.serialize = serialize;
+
+  // restore to state given by state string.  
+  // this CANNOT BE USED to add or remove items form the world. 
+  // TODO... somehow deal with that?
+  var deserialize = function(state) {
+    var serializedMap = JSON.parse(state);
+    if (typeof serializedMap !== 'object') throw new Error('invalid state string');
+    Object.keys(serializedMap).forEach(function(k) {
+      itemMap[k].deserialize(serializedMap[k]);
+    });
+  };
+  A.deserialize = deserialize;
 
   function Item(name) {
     this.adventure = A;
     name = name || "item";
     this.name = name; // base name without definite/indefinite articles, lower case if possible.  try to make it unique.
-    world.add(this);
+    addItem(this);
     this.description = null; // optional string representing the verbose/examine description of the item.
     this.keywords = [this.name]; // list of words to identify this item.  try to make them unique.        
     this.definiteName = 'the ' + this.name; // definite version of the name
     this.indefiniteName = ('aeiou'.indexOf(this.name.charAt(0).toLowerCase()) >= 0 ? "an " : "a ") + this.name;
     this.canBeTaken = true; // can you pick this up? 	  
-    
-    this.locationId = null;     
-    Object.defineProperty(this, 'location',{
-      get: function() {
-        return (this.locationId && (this.locationId in world.itemMap)) ? world.itemMap[this.locationId] : null;
-      },
-      set: function(location) {
-        this.locationId = (location && location.id) ? location.id : null;
-      }
-    });
-    
+
+    this.location = null;
     this.known = false; // part of the state
     this.hidden = false; // if it is hidden, you can't see it even if you're in the same room with it.
     this.exits = {}; // a list of mapping from directions to other places (uh, directions are strings?)
@@ -155,7 +164,7 @@ function Adventure() {
 
     this.listContents = function() {
       var here = this;
-      var items = world.items.filter(function(it) {
+      var items = allItems().filter(function(it) {
         return it.location === here && !it.hidden;
       });
       items.forEach(function(i) {
@@ -171,8 +180,8 @@ function Adventure() {
       var cnt = 0;
       for (var loc = item.location; loc; loc = loc.location) {
         cnt++;
-        if (cnt > world.maxNesting) {
-          throw new Error('Location nesting of more than ' + world.maxNesting + ' exceeded!');
+        if (cnt > A.maxNesting) {
+          throw new Error('Location nesting of more than ' + A.maxNesting + ' exceeded!');
         }
         if (loc === this) return true;
       }
@@ -182,8 +191,8 @@ function Adventure() {
       var cnt = 0;
       for (var loc = this; loc.location; loc = loc.location) {
         cnt++;
-        if (cnt > world.maxNesting) {
-          throw new Error('Location nesting of more than ' + world.maxNesting + ' exceeded!');
+        if (cnt > A.maxNesting) {
+          throw new Error('Location nesting of more than ' + A.maxNesting + ' exceeded!');
         }
       }
       return loc;
@@ -207,12 +216,40 @@ function Adventure() {
     };
 
     // copy the state of this item into a string
+    var serializationPrefix = 'ITEM!';
+
+    // return a string representing the current state of this item
     this.serialize = function() {
-      //TODO			
+      return JSON.stringify(this, function(k, v) {
+        if (v === A) return; // don't serialize the adventure object
+        if (k && v && (v.adventure === A)) { // serialize another Item/Place/Person as its id string  
+          return serializationPrefix + '#' + v.id;
+        }
+        if (typeof v === 'string' && v.startsWith(serializationPrefix)) { // if, somehow, a name collision comes in, escape it
+          return serializationPrefix + '?' + v;
+        }
+        return v;
+      });
     };
+
     // restore this item to the state represented by the passed-in string  
     this.deserialize = function(state) {
-      //TODO
+      var stateObject = JSON.parse(state, function(k, v) {
+        if ((typeof v === 'string') && (v.startsWith(serializationPrefix))) {
+          var c = v.charAt(serializationPrefix.length);
+          var s = v.substring(serializationPrefix.length + 1);
+          if (c == '#') {
+            return itemMap[s];
+          } else {
+            return s;
+          }
+        }
+        return v;
+      });
+      var item = this;
+      Object.keys(stateObject).forEach(function(k) {
+        item[k] = stateObject[k];
+      });
     };
 
     // newfunc takes an extra first parameter for superfunction
@@ -314,7 +351,7 @@ function Adventure() {
 
     var inventory = function inventory() {
       var subject = this;
-      var items = world.items.filter(function(item) {
+      var items = allItems().filter(function(item) {
         return item.appearsInInventoryOf(subject);
       }).map(function(i) {
         return i.indefiniteName;
@@ -451,7 +488,7 @@ function Adventure() {
   function parseItemAndRemainder(subject, str) {
     str = str.toLowerCase().replace(/^(the|a|an) /i, ''); // strip off articles
     // get keywords for all known items
-    var knownItems = flatten(world.items.filter(function(x) {
+    var knownItems = flatten(allItems().filter(function(x) {
       return x.known;
     }).map(function(x) {
       return x.keywords.map(function(k) {
@@ -504,5 +541,4 @@ function Adventure() {
   }
   A.respond = respond;
 
- 
 };
