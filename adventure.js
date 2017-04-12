@@ -4,6 +4,8 @@
 //TODO default bidirectional exits.
 //TODO limit to inventory?
 //TODO "jump"
+//TODO "markCommonlyImmutablePropertiesImmutable" is horrible and should be replaced,
+//      when the initializer is better, or with some other way.  
 
 function Adventure() {
 
@@ -94,8 +96,37 @@ function Adventure() {
   };
   A.deserialize = deserialize;
 
+  A.commonlyImmutableProperties = ['name','description','keywords','definiteName','indefiniteName','canBeTaken','id','unlisted'];      
+  A.markPropertiesImmutable = function(props) {
+      allItems().forEach(function(it){it.markPropertiesImmutable(props);});
+  };
+  A.markCommonlyImmutablePropertiesImmutable = function() {
+    A.markPropertiesImmutable(A.commonlyImmutableProperties);
+  }
+  
   function Item(name) {
     this.adventure = A;
+    
+    // prevent a property from being saved/loaded as state or modified
+    var immutableProperties = {};
+    this.markPropertyImmutable = function(prop) {
+        var thisFunction = this.markPropertyImmutable;
+        Object.defineProperty(this, prop, {
+            configurable: false,
+            enumerable: true,
+            writable: false,            
+        });
+        immutableProperties[prop] = true;
+    };      
+    this.markPropertiesImmutable = function(props) {
+        var item = this;
+        props.forEach(function(prop){if (!(prop in immutableProperties)) item.markPropertyImmutable(prop);});
+    }
+    this.listImmutableProperties = function() {
+        return Object.keys(immutableProperties);
+    }
+    
+    
     name = name || "item";
     this.name = name; // base name without definite/indefinite articles, lower case if possible.  try to make it unique.
     addItem(this);
@@ -220,7 +251,9 @@ function Adventure() {
 
     // return a string representing the current state of this item
     this.serialize = function() {
+      var item = this;
       return JSON.stringify(this, function(k, v) {
+        if ((this === item) && (k in immutableProperties)) return; // don't serialize immutables
         if (v === A) return; // don't serialize the adventure object
         if (k && v && (v.adventure === A)) { // serialize another Item/Place/Person as its id string  
           return serializationPrefix + '#' + v.id;
@@ -248,7 +281,9 @@ function Adventure() {
       });
       var item = this;
       Object.keys(stateObject).forEach(function(k) {
-        item[k] = stateObject[k];
+        if (!(k in immutableProperties)) {
+          item[k] = stateObject[k];
+        }
       });
     };
 
