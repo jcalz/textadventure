@@ -228,6 +228,14 @@
       return null;
     };
 
+    function dateString(millis) {
+      var date = new Date(millis);
+      if (Intl && Intl.DateTimeFormat) {
+        return (new Intl.DateTimeFormat('en-US',{month:'long', day: 'numeric', year:'numeric'})).format(date);
+      }
+      return date.toString();
+    };
+    
     $(function() {
 
       var processInputNormally = function() {
@@ -245,14 +253,15 @@
       }
 
       if (previouslySavedState) {
-        output('\n!!!!!          PREVIOUS GAME AVAILABLE          !!!!!', 'alert-text');
+        output('\n--------------------------------------PREVIOUS GAME AVAILABLE!--------------------------------------', 'alert-text');
         var timestamp = parseInt(localStorage.getItem('autosave-time'), 10);
         var ds = durationString(Date.now() - timestamp);
-        var when = (timestamp) ? ((ds) ? (ds + ' ago') : ('at ' + (new Date(timestamp)).toString())) : '';
-        output('It looks like you left a game in progress ' + when + '.');
-        output('Would you like to continue this game? Type "YES" or "NO".');
-        output('If you type "NO", the previous game will be erased.');
-        output('Type "YES" to continue the game or "NO" to start a new game.', 'alert-text');
+        var when = (timestamp) ? ((ds) ? (ds + ' ago') : ('on ' + dateString(timestamp))) : '';
+        output('It looks like you left a game in progress ' + when + '.\n');
+        output('Would you like to continue that game?');
+        output('If you type "YES", you will continue the previous game where you left off.');
+        output('If you type "NO", you will start a new game, and the previous game will be erased.');
+        output('\nPlease type "YES" or "NO".\n');
         $('#adventure-form').submit(function() {
           processInput(function(inputText) {
             var i = inputText.replace(/[\s"']/g, '').toLowerCase();
@@ -261,9 +270,9 @@
             var ret;
             if (i === 'yes') {
               adventure.deserialize(previouslySavedState);              
-              ret = '\n\n' + 'Okay, continuing the previous game...\n\n' + you.look();
+              ret = '\n' + 'Okay, continuing the previous game...\n\n' + you.look();
             } else {
-              ret = '\n\nOkay, starting a new game...\n\n' + you.start();
+              ret = '\nOkay, starting a new game...\n\n' + you.start();
               localStorage.removeItem('autosave');
             }
             processInputNormally();            
