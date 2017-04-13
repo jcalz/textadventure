@@ -561,9 +561,11 @@
       if (!subject.has(this)) {
         return 'You can\'t read it from here.';
       }
-      return 'You open the diary and begin to read.  It says:\n' +
-        '  "Dear Diary,\n' +
-        '   ... JOE DOESN\'T KNOW WHAT TO PUT HERE!';
+      return "You open the diary and begin to read.  It says:\n" +
+        "  \"Dear Diary,\n" +
+        "   I'm really excited.  I'm going to my friend's house.  My friend is Emma Watson."+
+        " I don't think my friend's parents like me very much. But they seemed very excited "+
+        "when I told them I was rich.\"";
     }
 
     var boulder = new adventure.Item("boulder");
@@ -614,7 +616,8 @@
         adventure.deserialize(initialState);
       }
       started = true;
-      ret += "Welcome to the game.\n\n" + you.look();
+      ret += "You have walked into a humongous house.  As you walk into a room, the door slams shut behind you and is now gone."
+        +"  Welcome to the game.\n\n" + you.look();
       return ret;
     };
     you.start.templates = ['restart the game'];
