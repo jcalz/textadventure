@@ -231,11 +231,18 @@
     function dateString(millis) {
       var date = new Date(millis);
       if (Intl && Intl.DateTimeFormat) {
-        return (new Intl.DateTimeFormat('en-US',{month:'long', day: 'numeric', year:'numeric'})).format(date);
+        return (new Intl.DateTimeFormat('en-US', {
+          month: 'long',
+          day: 'numeric',
+          year: 'numeric'
+        })).format(date);
       }
       return date.toString();
     };
-    
+
+    var gameVersion = '1';
+    var autosaveKey = 'autosave' + gameVersion;
+
     $(function() {
 
       var processInputNormally = function() {
@@ -244,8 +251,8 @@
             return you.adventure.respond(you, inputText);
           });
           if (hasLocalStorage) {
-            localStorage.setItem('autosave', adventure.serialize());
-            localStorage.setItem('autosave-time', Date.now());
+            localStorage.setItem(autosaveKey, adventure.serialize());
+            localStorage.setItem(autosaveKey + '-time', Date.now());
           }
           return false;
         });
@@ -253,8 +260,10 @@
       }
 
       if (previouslySavedState) {
-        output('\n--------------------------------------PREVIOUS GAME AVAILABLE!--------------------------------------', 'alert-text');
-        var timestamp = parseInt(localStorage.getItem('autosave-time'), 10);
+        output(
+          '\n--------------------------------------PREVIOUS GAME AVAILABLE!--------------------------------------',
+          'alert-text');
+        var timestamp = parseInt(localStorage.getItem(autosaveKey + '-time'), 10);
         var ds = durationString(Date.now() - timestamp);
         var when = (timestamp) ? ((ds) ? (ds + ' ago') : ('on ' + dateString(timestamp))) : '';
         output('It looks like you left a game in progress ' + when + '.\n');
@@ -269,13 +278,13 @@
               return 'Please type \"YES\" or \"NO\".';
             var ret;
             if (i === 'yes') {
-              adventure.deserialize(previouslySavedState);              
+              adventure.deserialize(previouslySavedState);
               ret = '\n' + 'Okay, continuing the previous game...\n\n' + you.look();
             } else {
               ret = '\nOkay, starting a new game...\n\n' + you.start();
-              localStorage.removeItem('autosave');
+              localStorage.removeItem(autosaveKey);
             }
-            processInputNormally();            
+            processInputNormally();
             return ret;
           });
           return false;
@@ -293,10 +302,13 @@
     ///////////// SPECIFIC STUFF /////////////////
     var adventure = new Adventure();
 
-    var you = new adventure.Person('you');
+    var you = {};
+    you.id = 'you';
+    you.name = 'you';
     you.keywords = ['me', 'myself', 'I'];
     you.known = true;
     you.unlisted = true;
+    you = new adventure.Person(you);
 
     // silly template language: 
     // "use ?i1" means "use" followed by an ITEM, to be passed as FIRST parameter to the function.
@@ -316,51 +328,63 @@
     you.addCommand('pull', 'bePulledBy', ['pull ?i1', 'tug ?i1', 'yank ?i1', 'pull on ?i1', 'tug on ?i1', 'yank on ?i1']);
 
     // PLACES
-    var room = new adventure.Place("room");
+    var room = {
+      id: 'room'
+    };
     room.description = 'You are standing in a room with four walls, no furniture, and no windows.';
+    room.exits = {
+      'north': 'closet',
+      'south': 'bedroom'
+    };
+    room = new adventure.Place(room);
 
-    var closet = new adventure.Place("closet");
+    var closet = {
+      id: 'closet'
+    };
     closet.description = 'You are standing inside of a closet. It is dim in here.  There is a heavy ' +
       'boulder up against the eastern wall.';
+    closet.exits = adventure.mutable({
+      'south': 'room',
+    });
 
-    var tunnel = new adventure.Place("underground tunnel");
-    tunnel.description = 'You find yourself in an underground tunnel that you can stand in and walk. ' +
-      'The walls of the tunnel are made out of stone.';
-    tunnel.keywords.push('tunnel');
+    closet = new adventure.Place(closet);
 
-    var pit = new adventure.Place("pit");
-    pit.description =
-      'You are now at the bottom of a pit.  This pit is very deep.  The walls of the pit are also made of stone.';
+    var tunnel = new adventure.Place({
+      name: "underground tunnel",
+      id: "tunnel",
+      description: 'You find yourself in an underground tunnel that you can stand in and walk. ' +
+        'The walls of the tunnel are made out of stone.',
+      keywords: ["tunnel", "underground tunnel"],
+      exits: {
+        'west': 'closet',
+        'east': 'pit'
+      }
 
-    var bedroom = new adventure.Place("bedroom");
-    bedroom.description = 'This room is big, with a huge bed covered in pink blankets.';
+    });
 
-    you.location = room;
+    var pit = new adventure.Place({
+      id: "pit",
+      description: 'You are now at the bottom of a pit.  This pit is very deep.  The walls of the pit are also made of stone.',
+      exits: {
+        'up': 'tunnel'
+      }
+    });
 
-    // EXITS
-    room.exits = {
-      'north': closet,
-      'south': bedroom
-    };
-    bedroom.exits = {
-      'north': room
-    };
-    closet.exits = {
-      'south': room //,
-      //      'east': tunnel
-    };
-    tunnel.exits = {
-      'west': closet,
-      'east': pit
-    };
-    pit.exits = {
-      'up': tunnel
-    };
+    var bedroom = new adventure.Place({
+      id: "bedroom",
+      description: 'This room is big, with a huge bed covered in pink blankets.',
+      exits: {
+        'north': 'room'
+      }
+    });
+
+    you.setLocation(room);
 
     // ITEMS
-    var canOpener = new adventure.Item("can opener");
-    canOpener.keywords.push('can opener', 'opener');
-    canOpener.location = tunnel;
+    var canOpener = {
+      id: 'can opener'
+    }
+    canOpener.keywords = ['can opener', 'opener'];
     canOpener.beUsedBy = function(subject, object) {
       if (!object) {
         if (subject.has(soup)) {
@@ -373,10 +397,13 @@
       }
       return subject.open(object, this);
     };
+    canOpener = new adventure.Item(canOpener);
+    canOpener.setLocation(tunnel);
 
-    var soup = new adventure.Item("can of soup");
-    soup.keywords.push('can', 'soup', 'soup can', 'soupcan');
-    soup.location = closet;
+    var soup = {
+      id: 'can of soup'
+    }
+    soup.keywords = ['can of soup', 'can', 'soup', 'soup can', 'soupcan'];
     soup.closed = true;
     soup.full = true;
     soup.beExaminedBy = function(subject) {
@@ -445,9 +472,13 @@
       }
       return "You can't eat it; the can is empty.";
     };
+    soup = new adventure.Item(soup);
+    soup.setLocation(closet);
 
-    var note = new adventure.Item("note");
-    note.location = pit;
+    var note = {
+      'id': 'note'
+    };
+    note.locationId = 'pit';
     note.beExaminedBy = function(subject) {
       if (!subject.has(this)) {
         return "It appears to have some writing on it, but you can't read it if you don't have it.";
@@ -462,13 +493,15 @@
         "\"Dear Mom,\n\nPlease do not eat the yummy NASS-TEE Split Pea Soup. I am saving it for dinner.\n" +
         "Love,\nElla.\"";
     };
+    var note = new adventure.Item(note);
 
-    var bed = new adventure.Item("bed");
-    bed.location = bedroom;
+    var bed = {
+      id: 'bed'
+    };
     bed.unlisted = true;
     bed.beExaminedBy = function(subject) {
       var ret = 'The bed is huge with pink blankets and purple pillows.';
-      if (teddyBear.location === bed.location) {
+      if (teddyBear.getLocation() === bed.getLocation()) {
         teddyBear.hidden = false; // reveal the teddy bear
         teddyBear.known = true;
         ret += ' There is a teddy bear on the bed.';
@@ -479,12 +512,16 @@
     bed.beUsedBy = function(subject) {
       return "You lie down on the bed and fall asleep for a few minutes.  You wake up feeling refreshed.";
     };
+    bed = new adventure.Item(bed);
+    bed.setLocation(bedroom);
+
     bedroom.newBackgroundItem('pillow', ['pillow', 'pillows']);
     bedroom.newBackgroundItem('blanket', ['blanket', 'blankets']);
 
-    var teddyBear = new adventure.Item("teddy bear");
+    var teddyBear = {
+      id: 'teddy bear'
+    };
     teddyBear.keywords = ['teddy bear', 'teddybear', 'teddy', 'bear'];
-    teddyBear.location = bedroom;
     teddyBear.hidden = true;
     teddyBear.beExaminedBy = function(subject) {
       if (!subject.has(teddyBear)) {
@@ -492,16 +529,19 @@
       }
       var ret = 'The teddy bear is brown and furry.  ' +
         'It is wearing green corduroy overalls with a pocket in the front.';
-      if (key.location === this) {
+      if (key.getLocation() === this) {
         ret += ' You notice a key sticking out of the pocket.';
         key.known = true;
       }
       return ret;
     }
+    teddyBear = new adventure.Item(teddyBear);
+    teddyBear.setLocation(bedroom);
 
-    var key = new adventure.Item("key");
+    var key = {
+      id: 'key'
+    };
     key.keywords = ['key'];
-    key.location = teddyBear;
     key.beUsedBy = function(subject, object) {
       if (!object) {
         return "I don't know how you want to use the key.  Try using it on something.";
@@ -513,10 +553,13 @@
       }
       return "You try to use the key on " + object.definiteName + " but it doesn't do anything.";
     }
+    key = new adventure.Item(key);
+    key.setLocation(teddyBear);
 
-    var cabinet = new adventure.Item("cabinet");
+    var cabinet = {
+      id: 'cabinet'
+    };
     cabinet.keywords = ['cabinet'];
-    cabinet.location = bedroom;
     cabinet.locked = true;
     cabinet.canBeTaken = false;
     cabinet.beExaminedBy = function(subject) {
@@ -552,10 +595,13 @@
       cabinet.locked = false;
       return "You turn the key in the cabinet's lock until you hear a click.  The cabinet springs open!";
     }
+    cabinet = new adventure.Item(cabinet);
+    cabinet.setLocation(bedroom);
 
-    var diary = new adventure.Item("diary");
+    var diary = {
+      id: 'diary'
+    };
     diary.keywords = ['diary'];
-    diary.location = cabinet;
     diary.description = 'The cover is labelled "Ella\'s Diary: PRIVATE, DO NOT READ!"';
     diary.beReadBy = function(subject) {
       if (!subject.has(this)) {
@@ -563,14 +609,17 @@
       }
       return "You open the diary and begin to read.  It says:\n" +
         "  \"Dear Diary,\n" +
-        "   I'm really excited.  I'm going to my friend's house.  My friend is Emma Watson."+
-        " I don't think my friend's parents like me very much. But they seemed very excited "+
+        "   I'm really excited.  I'm going to my friend's house.  My friend is Emma Watson." +
+        " I don't think my friend's parents like me very much. But they seemed very excited " +
         "when I told them I was rich.\"";
     }
+    diary = new adventure.Item(diary);
+    diary.setLocation(cabinet);
 
-    var boulder = new adventure.Item("boulder");
+    var boulder = {
+      id: 'boulder'
+    }
     boulder.keywords = ['boulder', 'bolder', 'rock', 'heavy boulder'];
-    boulder.location = closet;
     boulder.unlisted = true;
     boulder.canBeTaken = false;
     boulder.budged = false;
@@ -580,7 +629,7 @@
       var ret = "";
       if (!boulder.budged) {
         boulder.budged = true;
-        this.location.exits.east = tunnel;
+        this.getLocation().exits.east = 'tunnel';
         return "You bend down and push the boulder as hard as you can.  At first, it won't budge. " +
           "Finally, it starts moving along the wall, little by little.  Eventually you push it into " +
           "the corner where it stays.  You can't move it any further, and now you're sweaty and tired. " +
@@ -592,21 +641,23 @@
     }
     boulder.bePushedBy = boulder.beMovedBy;
     boulder.bePulledBy = boulder.beMovedBy;
+    boulder = new adventure.Item(boulder);
+    boulder.setLocation(closet);
 
     /*
     var magicEye = new adventure.Item("magic eye");
     magicEye.keywords = ['eye','magic eye','magic'];
-    magicEye.location = room;
-    pit.extendMethod('beExaminedBy',function(superMethod, subject) {
-        if (!subject.has(magicEye)) {
-            return 'YOU CANNOT SEE ANYTHING, YOU NEED THE MAGIC EYE';
+    magicEye.setLocation(room);
+    pit.beExaminedBy = function(subject) {
+      if (!subject.has(magicEye)) {
+        return "YOU CANNOT SEE ANYTHING WITHOUT THE MAGIC EYE";
         }
-        return superMethod(subject);
-    });
+      return this.superMethod('beExaminedBy')(subject);
+    }        
     */
 
     var initialState = adventure.serialize();
-    var previouslySavedState = hasLocalStorage && localStorage.getItem('autosave');
+    var previouslySavedState = hasLocalStorage && localStorage.getItem(autosaveKey);
 
     var started = false;
     you.start = function() {
@@ -616,15 +667,13 @@
         adventure.deserialize(initialState);
       }
       started = true;
-      ret += "You have walked into a humongous house.  As you walk into a room, the door slams shut behind you and is now gone."
-        +"  Welcome to the game.\n\n" + you.look();
+      ret +=
+        "You have walked into a humongous house.  As you walk into a room, the door slams shut behind you and is now gone." +
+        "  Welcome to the game.\n\n" + you.look();
       return ret;
     };
     you.start.templates = ['restart the game'];
     you.start.help = 'Go back to the beginning of the game.  Clears everything.  Be careful!';
-    
-    adventure.markCommonlyImmutablePropertiesImmutable();
-    
   </script>
 </body>
 

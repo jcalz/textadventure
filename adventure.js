@@ -6,6 +6,7 @@
 //TODO "jump"
 //TODO "markCommonlyImmutablePropertiesImmutable" is horrible and should be replaced,
 //      when the initializer is better, or with some other way.  
+//TODO in Item, merge rest of options.... make Person and Place just subclasses I guess?
 
 function Adventure() {
 
@@ -38,6 +39,23 @@ function Adventure() {
   }
   A.series = series;
 
+  function MutabilityMarker(mutable, object) {
+    this.mutable = mutable;
+    this.object = object;
+  }
+
+  function mutable(obj) {
+    if (obj instanceof MutabilityMarker) throw new Error('already marked');
+    return new MutabilityMarker(true, obj);
+  }
+  A.mutable = mutable;
+
+  function immutable(obj) {
+    if (obj instanceof MutabilityMarker) throw new Error('already marked');
+    return new MutabilityMarker(false, obj);
+  }
+  A.immutable = immutable;
+
   var directions = {
     north: ['n'],
     south: ['s'],
@@ -60,19 +78,22 @@ function Adventure() {
 
   // KEEP A MAP OF ALL ITEMS IN THE ADVENTURE
   var itemMap = {};
-  var addItem = function(item) {
-    var id = item.name.toLowerCase().replace(/[^a-z0-9_ ]/g, '').trim().replace(/\s+/g, '_');
+
+  var getNewId = function(id) {
     var cnt = 0;
-    while (id in itemMap) {
-      id = id + "" + cnt;
+    var testId = id;
+    while (testId in itemMap) {
+      testId = id + '' + cnt;
       cnt++;
     }
-    itemMap[id] = item;
-    item.id = id;
+    return testId;
   }
+
   var allItems = function() {
     return objectValues(itemMap);
   }
+  A.itemMap = itemMap;
+  A.allItems = allItems;
 
   // serialize adventure
   var serialize = function() {
@@ -91,238 +112,319 @@ function Adventure() {
     var serializedMap = JSON.parse(state);
     if (typeof serializedMap !== 'object') throw new Error('invalid state string');
     Object.keys(serializedMap).forEach(function(k) {
-      itemMap[k].deserialize(serializedMap[k]);
+      var item = itemMap[k];
+      // if bad item, ignore it?  TODO
+      if (item) {
+        item.deserialize(serializedMap[k]);
+      }
     });
   };
   A.deserialize = deserialize;
 
-  A.commonlyImmutableProperties = ['name','description','keywords','definiteName','indefiniteName','canBeTaken','id','unlisted'];      
-  A.markPropertiesImmutable = function(props) {
-      allItems().forEach(function(it){it.markPropertiesImmutable(props);});
-  };
-  A.markCommonlyImmutablePropertiesImmutable = function() {
-    A.markPropertiesImmutable(A.commonlyImmutableProperties);
-  }
-  
-  function Item(name) {
+  A.commonlyImmutableProperties = ['name', 'description', 'keywords', 'definiteName', 'indefiniteName', 'canBeTaken',
+    'id', 'unlisted'
+  ];
+
+  function Item(options) {
+    var item = this;
     this.adventure = A;
-    
-    // prevent a property from being saved/loaded as state or modified
-    var immutableProperties = {};
-    this.markPropertyImmutable = function(prop) {
-        var thisFunction = this.markPropertyImmutable;
-        Object.defineProperty(this, prop, {
-            configurable: false,
-            enumerable: true,
-            writable: false,            
-        });
-        immutableProperties[prop] = true;
-    };      
-    this.markPropertiesImmutable = function(props) {
-        var item = this;
-        props.forEach(function(prop){if (!(prop in immutableProperties)) item.markPropertyImmutable(prop);});
-    }
-    this.listImmutableProperties = function() {
-        return Object.keys(immutableProperties);
-    }
-    
-    
-    name = name || "item";
-    this.name = name; // base name without definite/indefinite articles, lower case if possible.  try to make it unique.
-    addItem(this);
-    this.description = null; // optional string representing the verbose/examine description of the item.
-    this.keywords = [this.name]; // list of words to identify this item.  try to make them unique.        
-    this.definiteName = 'the ' + this.name; // definite version of the name
-    this.indefiniteName = ('aeiou'.indexOf(this.name.charAt(0).toLowerCase()) >= 0 ? "an " : "a ") + this.name;
-    this.canBeTaken = true; // can you pick this up? 	  
-
-    this.location = null;
-    this.known = false; // part of the state
-    this.hidden = false; // if it is hidden, you can't see it even if you're in the same room with it.
-    this.exits = {}; // a list of mapping from directions to other places (uh, directions are strings?)
-
-    this.beTakenBy = function(subject) {
-      if (!this.canBeTaken) {
-        return "You can't pick up " + this.definiteName + ".";
-      }
-      if (subject.has(this)) {
-        return "You already have " + this.definiteName + ".";
-      }
-      this.location = subject;
-      return "You have picked up " + this.definiteName + ".";
-    };
-
-    this.beDroppedBy = function(subject) {
-      if (!subject.has(this)) {
-        return "You don't have " + this.definiteName + ".";
-      }
-      this.location = subject.location;
-      return "You have dropped " + this.definiteName + ".";
-    };
-
-    this.beExaminedBy = function(subject) {
-      var here = this;
-      var ret = '';
-      if (subject.location === here) {
-        ret += titleCase(this.name) + '\n';
-      }
-      ret += (this.description || 'It\'s just ' + this.indefiniteName + '.');
-      if (this.exits && Object.keys(this.exits).length > 0) {
-        var es = Object.keys(this.exits);
-        if (subject.location === here) {
-          ret += ' There ';
-          ret += es.length == 1 ? 'is an exit' : 'are exits';
-        } else {
-          ret += ' It has ';
-          ret += es.length == 1 ? 'an exit' : 'exits';
-        }
-        ret += ' leading ';
-        ret += series(es);
-        ret += '.';
-      }
-      var items = this.listContents().map(function(it) {
-        return it.indefiniteName;
-      });
-      if (items.length > 0) {
-        if (subject.location === here) {
-          ret += ' ' + capitalize(series(items)) + (items.length > 1 ? ' are' : ' is') + ' here.';
-        } else {
-          ret += ' It contains ' + series(items) + '.';
-        }
-      }
-      return ret;
-    };
-
-    this.listContents = function() {
-      var here = this;
-      var items = allItems().filter(function(it) {
-        return it.location === here && !it.hidden;
-      });
-      items.forEach(function(i) {
-        i.known = true;
-      });
-      items = items.filter(function(it) {
-        return !(it.unlisted)
-      });
-      return items;
-    };
-
-    this.ultimatelyContains = function(item) {
-      var cnt = 0;
-      for (var loc = item.location; loc; loc = loc.location) {
-        cnt++;
-        if (cnt > A.maxNesting) {
-          throw new Error('Location nesting of more than ' + A.maxNesting + ' exceeded!');
-        }
-        if (loc === this) return true;
-      }
-      return false;
-    };
-    this.ultimateLocation = function() {
-      var cnt = 0;
-      for (var loc = this; loc.location; loc = loc.location) {
-        cnt++;
-        if (cnt > A.maxNesting) {
-          throw new Error('Location nesting of more than ' + A.maxNesting + ' exceeded!');
-        }
-      }
-      return loc;
-    };
-    this.canSee = function(item) {
-      return !item.hidden && (this.ultimateLocation() === item.ultimateLocation());
-    };
-    this.has = function(item) {
-      return !item.hidden && item.location === this; //(this.ultimatelyContains(item));
-    };
-    this.appearsInInventoryOf = function(subject) {
-      return subject.has(this);
-    };
-
-    this.exitedBy = function(subject, dir) {
-      if (!this.exits || !(dir in this.exits)) {
-        return "You can't go " + dir + " from here.";
-      }
-      subject.location = this.exits[dir];
-      return subject.look();
-    };
-
-    // copy the state of this item into a string
-    var serializationPrefix = 'ITEM!';
-
-    // return a string representing the current state of this item
-    this.serialize = function() {
-      var item = this;
-      return JSON.stringify(this, function(k, v) {
-        if ((this === item) && (k in immutableProperties)) return; // don't serialize immutables
-        if (v === A) return; // don't serialize the adventure object
-        if (k && v && (v.adventure === A)) { // serialize another Item/Place/Person as its id string  
-          return serializationPrefix + '#' + v.id;
-        }
-        if (typeof v === 'string' && v.startsWith(serializationPrefix)) { // if, somehow, a name collision comes in, escape it
-          return serializationPrefix + '?' + v;
-        }
-        return v;
-      });
-    };
-
-    // restore this item to the state represented by the passed-in string  
-    this.deserialize = function(state) {
-      var stateObject = JSON.parse(state, function(k, v) {
-        if ((typeof v === 'string') && (v.startsWith(serializationPrefix))) {
-          var c = v.charAt(serializationPrefix.length);
-          var s = v.substring(serializationPrefix.length + 1);
-          if (c == '#') {
-            return itemMap[s];
-          } else {
-            return s;
-          }
-        }
-        return v;
-      });
-      var item = this;
-      Object.keys(stateObject).forEach(function(k) {
-        if (!(k in immutableProperties)) {
-          item[k] = stateObject[k];
-        }
-      });
-    };
-
-    // newfunc takes an extra first parameter for superfunction
-    this.extendMethod = function(methodName, newMethod) {
-      var object = this;
-      var superMethod = object[methodName].bind(object);
-      object[methodName] = function() {
-        var args = Array.from(arguments);
-        args.unshift(superMethod);
-        return newMethod.apply(object, args);
+    if (typeof options === 'string') {
+      options = {
+        id: options
       };
     }
+    options = options || {};
+    if (options.id && options.id in itemMap) throw new Error('cannot reuse id "' + options.id + '"');
+    var id = options.id || getNewId('item');
+    this.id = id;
+    itemMap[id] = this;
 
-    this.newBackgroundItem = function(name, keywords) {
-      var item = new Item(name);
-      if (keywords) item.keywords = keywords;
-      item.location = this;
-      item.unlisted = true;
-      item.canBeTaken = false;
-      return item;
+    var name = options.name || id;
+
+    // prevent a property from being saved/loaded as state or modified
+    var immutableProperties = {
+      'id': true
     };
 
+    this.getImmutableProperties = function() {
+      return immutableProperties;
+    };
+
+    var defaultOptions = {
+      name: immutable(name), // base name, no articles, in lower case unless always capitalized, best to be unique
+      description: immutable(null), // optional string when you examine item
+      keywords: immutable([name]), // words to identify item, best to be unique
+      definiteName: immutable('the ' + name),
+      indefiniteName: immutable(('aeiou'.indexOf(name.charAt(0).toLowerCase()) >= 0 ? 'an ' : 'a ') + name),
+      canBeTaken: immutable(true), // can be picked up
+      locationId: mutable(null), // initial location
+      known: mutable(false), // have you seen this yet
+      hidden: mutable(false), // is it hidden
+      exits: immutable({}) // mapping from directions to other places
+    }
+
+    Object.keys(defaultOptions).forEach(function(prop) {
+      var v = defaultOptions[prop];
+      var immutable = false;
+      if (v instanceof MutabilityMarker) {
+        immutable = !v.mutable;
+        v = v.object;
+      }
+      immutableProperties[prop] = immutable;
+      item[prop] = v;
+    });
+
+    Object.keys(options).forEach(function(prop) {
+      var v = options[prop];
+      var immutable = !!immutableProperties[prop];
+      if (v instanceof MutabilityMarker) {
+        immutable = !v.mutable;
+        v = v.object;
+      }
+      if (typeof v !== 'function') {
+        immutableProperties[prop] = immutable;
+      }
+      item[prop] = v;
+    });
+
+    // make immutable properties immutable
+    Object.keys(immutableProperties).forEach(function(prop) {
+      Object.defineProperty(item, prop, {
+        configurable: false,
+        enumerable: true,
+        writable: !immutableProperties[prop],
+      });
+    });
+
+    Object.keys(immutableProperties).forEach(function(prop) {
+      if (!immutableProperties[prop]) {
+        delete(immutableProperties[prop]);
+      }
+    });
+
   }
+
+  Item.prototype.getLocation = function() {
+    if ((!this.locationId) || (!(this.locationId in itemMap))) return null;
+    return itemMap[this.locationId];
+  };
+
+  Item.prototype.setLocation = function(loc) {
+    if (typeof loc === 'string') {
+      this.locationId = loc;
+    } else if ('id' in loc) {
+      this.locationId = loc.id;
+    } else throw new Error('invalid location');
+  };
+
+  Item.prototype.beTakenBy = function(subject) {
+    if (!this.canBeTaken) {
+      return "You can't pick up " + this.definiteName + ".";
+    }
+    if (subject.has(this)) {
+      return "You already have " + this.definiteName + ".";
+    }
+    this.setLocation(subject);
+    return "You have picked up " + this.definiteName + ".";
+  };
+
+  Item.prototype.beDroppedBy = function(subject) {
+    if (!subject.has(this)) {
+      return "You don't have " + this.definiteName + ".";
+    }
+    this.setLocation(subject.getLocation());
+    return "You have dropped " + this.definiteName + ".";
+  };
+
+  Item.prototype.beExaminedBy = function(subject) {
+    var here = this;
+    var ret = '';
+    if (subject.getLocation() === here) {
+      ret += titleCase(this.name) + '\n';
+    }
+    ret += (this.description || 'It\'s just ' + this.indefiniteName + '.');
+    if (this.exits && Object.keys(this.exits).length > 0) {
+      var es = Object.keys(this.exits);
+      if (subject.getLocation() === here) {
+        ret += ' There ';
+        ret += es.length == 1 ? 'is an exit' : 'are exits';
+      } else {
+        ret += ' It has ';
+        ret += es.length == 1 ? 'an exit' : 'exits';
+      }
+      ret += ' leading ';
+      ret += series(es);
+      ret += '.';
+    }
+    var items = this.listContents().map(function(it) {
+      return it.indefiniteName;
+    });
+    if (items.length > 0) {
+      if (subject.getLocation() === here) {
+        ret += ' ' + capitalize(series(items)) + (items.length > 1 ? ' are' : ' is') + ' here.';
+      } else {
+        ret += ' It contains ' + series(items) + '.';
+      }
+    }
+    return ret;
+  };
+
+  Item.prototype.listContents = function() {
+    var here = this;
+    var items = allItems().filter(function(it) {
+      return it.getLocation() === here && !it.hidden;
+    });
+    items.forEach(function(i) {
+      i.known = true;
+    });
+    items = items.filter(function(it) {
+      return !(it.unlisted)
+    });
+    return items;
+  };
+
+  Item.prototype.ultimatelyContains = function(item) {
+    var cnt = 0;
+    for (var loc = item.getLocation(); loc; loc = loc.getLocation()) {
+      cnt++;
+      if (cnt > A.maxNesting) {
+        throw new Error('Location nesting of more than ' + A.maxNesting + ' exceeded!');
+      }
+      if (loc === this) return true;
+    }
+    return false;
+  };
+
+  Item.prototype.ultimateLocation = function() {
+    var cnt = 0;
+    for (var loc = this; loc.getLocation(); loc = loc.getLocation()) {
+      cnt++;
+      if (cnt > A.maxNesting) {
+        throw new Error('Location nesting of more than ' + A.maxNesting + ' exceeded!');
+      }
+    }
+    return loc;
+  };
+  Item.prototype.canSee = function(item) {
+    return !item.hidden && (this.ultimateLocation() === item.ultimateLocation());
+  };
+  Item.prototype.has = function(item) {
+    return !item.hidden && item.getLocation() === this; //(this.ultimatelyContains(item));
+  };
+  Item.prototype.appearsInInventoryOf = function(subject) {
+    return subject.has(this);
+  };
+
+  Item.prototype.exitedBy = function(subject, dir) {
+    if (!this.exits || !(dir in this.exits)) {
+      return "You can't go " + dir + " from here.";
+    }
+    subject.setLocation(this.exits[dir]);
+    return subject.look();
+  };
+
+  Item.prototype.superMethod = function(name) {
+    return Item.prototype[name].bind(this);
+  };
+
+  // copy the state of this item into a string
+  var serializationPrefix = 'ITEM!';
+
+  // return a string representing the current state of this item
+  Item.prototype.serialize = function() {
+    var item = this;
+    return JSON.stringify(this, function(k, v) {
+      if ((this === item) && (k in this.getImmutableProperties())) return; // don't serialize immutables
+      if (v === A) return; // don't serialize the adventure object
+      if (k && v && (v.adventure === A)) { // serialize another Item/Place/Person as its id string  
+        return serializationPrefix + '#' + v.id;
+      }
+      if (typeof v === 'string' && v.startsWith(serializationPrefix)) { // if, somehow, a name collision comes in, escape it
+        return serializationPrefix + '?' + v;
+      }
+      return v;
+    });
+  };
+
+  // restore this item to the state represented by the passed-in string  
+  Item.prototype.deserialize = function(state) {
+    var stateObject = JSON.parse(state, function(k, v) {
+      if ((typeof v === 'string') && (v.startsWith(serializationPrefix))) {
+        var c = v.charAt(serializationPrefix.length);
+        var s = v.substring(serializationPrefix.length + 1);
+        if (c == '#') {
+          return itemMap[s];
+        } else {
+          return s;
+        }
+      }
+      return v;
+    });
+    var item = this;
+    Object.keys(stateObject).forEach(function(k) {
+      if (!(k in item.getImmutableProperties())) {
+        item[k] = stateObject[k];
+      }
+    });
+  };
+
+  Item.prototype.newBackgroundItem = function(name, keywords) {
+    var options = {
+      name: name,
+      keywords: keywords ? keywords : [],
+      unlisted: true,
+      canBeTaken: false,
+      locationId: this.id
+    };
+    return new Item(options);
+  };
+
   A.Item = Item;
 
-  function Place(name) {
-    name = name || "place";
-    Item.call(this, name);
-    this.canBeTaken = false; // by default you can't pick up a place
+  function Place(options) {
+    if (typeof options === 'string') {
+      options = {
+        id: options
+      };
+    }
+    options = options || {};
+    if (!('id' in options)) {
+      options.id = getNewId('place');
+    }
+    if (!('name' in options)) {
+      options.name = options.id;
+    }
+    if (!('canBeTaken' in options)) {
+      options.canBeTaken = false;
+    }
+    Item.call(this, options);
   }
+  Place.prototype = Object.create(Item.prototype);
   A.Place = Place;
 
-  function Person(name) {
-    name = name || "person";
-    Item.call(this, name);
-    this.indefiniteName = name;
-    this.definiteName = name;
-    this.canBeTaken = false; // can't pick up a person
+  function Person(options) {
+    if (typeof options === 'string') {
+      options = {
+        id: options
+      };
+    }
+    options = options || {};
+    if (!('id' in options)) {
+      options.id = getNewId('person');
+    }
+    if (!('name' in options)) {
+      options.name = options.id;
+    }
+    if (!('indefiniteName' in options)) {
+      options.indefiniteName = options.name;
+    }
+    if (!('definiteName' in options)) {
+      options.definiteName = options.definiteName;
+    }
+    if (!('canBeTaken' in options)) {
+      options.canBeTaken = false;
+    }
+    Item.call(this, options);
 
     this.addCommand = function(subjectCommandName, objectCommandName, templates, help) {
       var command = function command(object) {
@@ -346,10 +448,10 @@ function Adventure() {
     };
 
     var go = function(dir) {
-      if (!this.location) {
+      if (!this.getLocation()) {
         return "You can't go " + dir + " from here.";
       }
-      return this.location.exitedBy(this, dir);
+      return this.getLocation().exitedBy(this, dir);
     }
     go.templates = ['go ?d1', '?d1', 'move ?d1', 'walk ?d1'];
     go.help = 'Go in the specified direction, like North or South.';
@@ -367,8 +469,8 @@ function Adventure() {
     this.climbDown = climbDown;
 
     var look = function look() {
-      this.location.known = true;
-      return this.location.beExaminedBy(this);
+      this.getLocation().known = true;
+      return this.getLocation().beExaminedBy(this);
     };
     look.templates = ['look', 'l'];
     look.help = 'Look around you.';
@@ -430,6 +532,7 @@ function Adventure() {
       ],
       'Examine an item.');
   }
+  Person.prototype = Object.create(Item.prototype);
   A.Person = Person;
 
   function interpretInput(subject, str) {
