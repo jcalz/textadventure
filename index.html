@@ -332,10 +332,6 @@
       id: 'room'
     };
     room.description = 'You are standing in a room with four walls, no furniture, and no windows.';
-    room.exits = {
-      'north': 'closet',
-      'south': 'bedroom'
-    };
     room = new adventure.Place(room);
 
     var closet = {
@@ -343,9 +339,6 @@
     };
     closet.description = 'You are standing inside of a closet. It is dim in here.  There is a heavy ' +
       'boulder up against the eastern wall.';
-    closet.exits = adventure.mutable({
-      'south': 'room',
-    });
 
     closet = new adventure.Place(closet);
 
@@ -354,31 +347,69 @@
       id: "tunnel",
       description: 'You find yourself in an underground tunnel that you can stand in and walk. ' +
         'The walls of the tunnel are made out of stone.',
-      keywords: ["tunnel", "underground tunnel"],
-      exits: {
-        'west': 'closet',
-        'east': 'pit'
-      }
+      keywords: ["tunnel", "underground tunnel"]
 
     });
 
     var pit = new adventure.Place({
       id: "pit",
-      description: 'You are now at the bottom of a pit.  This pit is very deep.  The walls of the pit are also made of stone.',
-      exits: {
-        'up': 'tunnel'
-      }
+      description: 'You are now at the bottom of a pit.  This pit is very deep.  The walls of the pit are also made of stone.'
     });
 
     var bedroom = new adventure.Place({
       id: "bedroom",
       description: 'This room is big, with a huge bed covered in pink blankets.',
-      exits: {
-        'north': 'room'
-      }
     });
 
-    you.setLocation(room);
+    // EXITS
+
+    new adventure.Exit({
+      location: room,
+      direction: 'north',
+      destination: closet
+    });
+    new adventure.Exit({
+      location: closet,
+      direction: 'south',
+      destination: room
+    });
+
+    new adventure.Exit({
+      location: room,
+      direction: 'south',
+      destination: bedroom
+    });
+    new adventure.Exit({
+      location: bedroom,
+      direction: 'north',
+      destination: room
+    });
+
+    var hiddenExit = new adventure.Exit({
+      id: 'hiddenExit',
+      location: closet,
+      direction: 'east',
+      destination: tunnel,
+      hidden: true
+    });
+    new adventure.Exit({
+      location: tunnel,
+      direction: 'west',
+      destination: closet
+    });
+
+    new adventure.Exit({
+      location: tunnel,
+      direction: 'east',
+      destination: pit
+    });
+    new adventure.Exit({
+      location: pit,
+      direction: 'up',
+      destination: tunnel
+    });
+
+    you.location = room;
 
     // ITEMS
     var canOpener = {
@@ -398,7 +429,7 @@
       return subject.open(object, this);
     };
     canOpener = new adventure.Item(canOpener);
-    canOpener.setLocation(tunnel);
+    canOpener.location = tunnel;
 
     var soup = {
       id: 'can of soup'
@@ -473,12 +504,12 @@
       return "You can't eat it; the can is empty.";
     };
     soup = new adventure.Item(soup);
-    soup.setLocation(closet);
+    soup.location = closet;
 
     var note = {
       'id': 'note'
     };
-    note.locationId = 'pit';
+    note.location = 'pit';
     note.beExaminedBy = function(subject) {
       if (!subject.has(this)) {
         return "It appears to have some writing on it, but you can't read it if you don't have it.";
@@ -501,7 +532,7 @@
     bed.unlisted = true;
     bed.beExaminedBy = function(subject) {
       var ret = 'The bed is huge with pink blankets and purple pillows.';
-      if (teddyBear.getLocation() === bed.getLocation()) {
+      if (teddyBear.location === bed.location) {
         teddyBear.hidden = false; // reveal the teddy bear
         teddyBear.known = true;
         ret += ' There is a teddy bear on the bed.';
@@ -513,7 +544,7 @@
       return "You lie down on the bed and fall asleep for a few minutes.  You wake up feeling refreshed.";
     };
     bed = new adventure.Item(bed);
-    bed.setLocation(bedroom);
+    bed.location = bedroom;
 
     bedroom.newBackgroundItem('pillow', ['pillow', 'pillows']);
     bedroom.newBackgroundItem('blanket', ['blanket', 'blankets']);
@@ -529,14 +560,14 @@
       }
       var ret = 'The teddy bear is brown and furry.  ' +
         'It is wearing green corduroy overalls with a pocket in the front.';
-      if (key.getLocation() === this) {
+      if (key.location === this) {
         ret += ' You notice a key sticking out of the pocket.';
         key.known = true;
       }
       return ret;
     }
     teddyBear = new adventure.Item(teddyBear);
-    teddyBear.setLocation(bedroom);
+    teddyBear.location = bedroom;
 
     var key = {
       id: 'key'
@@ -554,7 +585,7 @@
       return "You try to use the key on " + object.definiteName + " but it doesn't do anything.";
     }
     key = new adventure.Item(key);
-    key.setLocation(teddyBear);
+    key.location = teddyBear;
 
     var cabinet = {
       id: 'cabinet'
@@ -596,7 +627,7 @@
       return "You turn the key in the cabinet's lock until you hear a click.  The cabinet springs open!";
     }
     cabinet = new adventure.Item(cabinet);
-    cabinet.setLocation(bedroom);
+    cabinet.location = bedroom;
 
     var diary = {
       id: 'diary'
@@ -614,7 +645,7 @@
         "when I told them I was rich.\"";
     }
     diary = new adventure.Item(diary);
-    diary.setLocation(cabinet);
+    diary.location = cabinet;
 
     var boulder = {
       id: 'boulder'
@@ -629,7 +660,7 @@
       var ret = "";
       if (!boulder.budged) {
         boulder.budged = true;
-        this.getLocation().exits.east = 'tunnel';
+        hiddenExit.hidden = false;
         return "You bend down and push the boulder as hard as you can.  At first, it won't budge. " +
           "Finally, it starts moving along the wall, little by little.  Eventually you push it into " +
           "the corner where it stays.  You can't move it any further, and now you're sweaty and tired. " +
@@ -642,12 +673,12 @@
     boulder.bePushedBy = boulder.beMovedBy;
     boulder.bePulledBy = boulder.beMovedBy;
     boulder = new adventure.Item(boulder);
-    boulder.setLocation(closet);
+    boulder.location = closet;
 
     /*
     var magicEye = new adventure.Item("magic eye");
     magicEye.keywords = ['eye','magic eye','magic'];
-    magicEye.setLocation(room);
+    magicEye.location = room;
     pit.beExaminedBy = function(subject) {
       if (!subject.has(magicEye)) {
         return "YOU CANNOT SEE ANYTHING WITHOUT THE MAGIC EYE";

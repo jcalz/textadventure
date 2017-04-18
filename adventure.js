@@ -157,10 +157,9 @@ function Adventure() {
       definiteName: immutable('the ' + name),
       indefiniteName: immutable(('aeiou'.indexOf(name.charAt(0).toLowerCase()) >= 0 ? 'an ' : 'a ') + name),
       canBeTaken: immutable(true), // can be picked up
-      locationId: mutable(null), // initial location
+      location: mutable(null), // initial location
       known: mutable(false), // have you seen this yet
       hidden: mutable(false), // is it hidden
-      exits: immutable({}) // mapping from directions to other places
     }
 
     Object.keys(defaultOptions).forEach(function(prop) {
@@ -189,11 +188,27 @@ function Adventure() {
 
     // make immutable properties immutable
     Object.keys(immutableProperties).forEach(function(prop) {
-      Object.defineProperty(item, prop, {
+      var o = {
         configurable: false,
         enumerable: true,
-        writable: !immutableProperties[prop],
-      });
+        writable: !immutableProperties[prop]
+      };
+      if (prop === 'location') {
+        var location = item[prop];
+        o.get = function() {
+          var ret = location;
+          if (typeof location === 'string') ret = itemMap[location];
+          if (!ret) ret = null;
+          return ret;
+        };
+        if (o.writable) {
+          delete o.writable;
+          o.set = function(l) {
+            location = l;
+          };
+        }
+      }
+      Object.defineProperty(item, prop, o);
     });
 
     Object.keys(immutableProperties).forEach(function(prop) {
@@ -202,19 +217,13 @@ function Adventure() {
       }
     });
 
-  }
-
-  Item.prototype.getLocation = function() {
-    if ((!this.locationId) || (!(this.locationId in itemMap))) return null;
-    return itemMap[this.locationId];
   };
 
-  Item.prototype.setLocation = function(loc) {
-    if (typeof loc === 'string') {
-      this.locationId = loc;
-    } else if ('id' in loc) {
-      this.locationId = loc.id;
-    } else throw new Error('invalid location');
+  Item.prototype.getExits = function() {
+    var here = this;
+    return allItems().filter(function(it) {
+      return (it instanceof Exit) && (it.location === here) && (!it.hidden);
+    });
   };
 
   Item.prototype.beTakenBy = function(subject) {
@@ -224,7 +233,7 @@ function Adventure() {
     if (subject.has(this)) {
       return "You already have " + this.definiteName + ".";
     }
-    this.setLocation(subject);
+    this.location = subject;
     return "You have picked up " + this.definiteName + ".";
   };
 
@@ -232,20 +241,23 @@ function Adventure() {
     if (!subject.has(this)) {
       return "You don't have " + this.definiteName + ".";
     }
-    this.setLocation(subject.getLocation());
+    this.location = subject.location;
     return "You have dropped " + this.definiteName + ".";
   };
 
   Item.prototype.beExaminedBy = function(subject) {
     var here = this;
     var ret = '';
-    if (subject.getLocation() === here) {
+    if (subject.location === here) {
       ret += titleCase(this.name) + '\n';
     }
     ret += (this.description || 'It\'s just ' + this.indefiniteName + '.');
-    if (this.exits && Object.keys(this.exits).length > 0) {
-      var es = Object.keys(this.exits);
-      if (subject.getLocation() === here) {
+    var exits = this.getExits();
+    if (exits.length > 0) {
+      var es = exits.map(function(ex) {
+        return ex.direction;
+      });
+      if (subject.location === here) {
         ret += ' There ';
         ret += es.length == 1 ? 'is an exit' : 'are exits';
       } else {
@@ -256,11 +268,13 @@ function Adventure() {
       ret += series(es);
       ret += '.';
     }
-    var items = this.listContents().map(function(it) {
+    var items = this.listContents().filter(function(it) {
+      return !(it instanceof Exit);
+    }).map(function(it) {
       return it.indefiniteName;
     });
     if (items.length > 0) {
-      if (subject.getLocation() === here) {
+      if (subject.location === here) {
         ret += ' ' + capitalize(series(items)) + (items.length > 1 ? ' are' : ' is') + ' here.';
       } else {
         ret += ' It contains ' + series(items) + '.';
@@ -272,7 +286,7 @@ function Adventure() {
   Item.prototype.listContents = function() {
     var here = this;
     var items = allItems().filter(function(it) {
-      return it.getLocation() === here && !it.hidden;
+      return it.location === here && !it.hidden;
     });
     items.forEach(function(i) {
       i.known = true;
@@ -285,7 +299,7 @@ function Adventure() {
 
   Item.prototype.ultimatelyContains = function(item) {
     var cnt = 0;
-    for (var loc = item.getLocation(); loc; loc = loc.getLocation()) {
+    for (var loc = item.location; loc; loc = loc.location) {
       cnt++;
       if (cnt > A.maxNesting) {
         throw new Error('Location nesting of more than ' + A.maxNesting + ' exceeded!');
@@ -297,7 +311,7 @@ function Adventure() {
 
   Item.prototype.ultimateLocation = function() {
     var cnt = 0;
-    for (var loc = this; loc.getLocation(); loc = loc.getLocation()) {
+    for (var loc = this; loc.location; loc = loc.location) {
       cnt++;
       if (cnt > A.maxNesting) {
         throw new Error('Location nesting of more than ' + A.maxNesting + ' exceeded!');
@@ -309,17 +323,19 @@ function Adventure() {
     return !item.hidden && (this.ultimateLocation() === item.ultimateLocation());
   };
   Item.prototype.has = function(item) {
-    return !item.hidden && item.getLocation() === this; //(this.ultimatelyContains(item));
+    return !item.hidden && item.location === this; //(this.ultimatelyContains(item));
   };
   Item.prototype.appearsInInventoryOf = function(subject) {
     return subject.has(this);
   };
 
   Item.prototype.exitedBy = function(subject, dir) {
-    if (!this.exits || !(dir in this.exits)) {
+    var exit = this.getExits().find(function(ex) {
+      return ex.direction === dir;
+    });
+    if (!exit)
       return "You can't go " + dir + " from here.";
-    }
-    subject.setLocation(this.exits[dir]);
+    subject.location = exit.destination;
     return subject.look();
   };
 
@@ -374,7 +390,7 @@ function Adventure() {
       keywords: keywords ? keywords : [],
       unlisted: true,
       canBeTaken: false,
-      locationId: this.id
+      location: this
     };
     return new Item(options);
   };
@@ -419,7 +435,7 @@ function Adventure() {
       options.indefiniteName = options.name;
     }
     if (!('definiteName' in options)) {
-      options.definiteName = options.definiteName;
+      options.definiteName = options.name;
     }
     if (!('canBeTaken' in options)) {
       options.canBeTaken = false;
@@ -448,10 +464,10 @@ function Adventure() {
     };
 
     var go = function(dir) {
-      if (!this.getLocation()) {
+      if (!this.location) {
         return "You can't go " + dir + " from here.";
       }
-      return this.getLocation().exitedBy(this, dir);
+      return this.location.exitedBy(this, dir);
     }
     go.templates = ['go ?d1', '?d1', 'move ?d1', 'walk ?d1'];
     go.help = 'Go in the specified direction, like North or South.';
@@ -469,8 +485,8 @@ function Adventure() {
     this.climbDown = climbDown;
 
     var look = function look() {
-      this.getLocation().known = true;
-      return this.getLocation().beExaminedBy(this);
+      this.location.known = true;
+      return this.location.beExaminedBy(this);
     };
     look.templates = ['look', 'l'];
     look.help = 'Look around you.';
@@ -534,6 +550,47 @@ function Adventure() {
   }
   Person.prototype = Object.create(Item.prototype);
   A.Person = Person;
+
+  function Exit(options) {
+    if (typeof options === 'string') {
+      options = {
+        id: options
+      };
+    }
+    options = options || {};
+    if (!('id' in options)) {
+      options.id = getNewId('exit');
+    }
+    if (!('name' in options)) {
+      options.name = options.id;
+    }
+    if (!('canBeTaken' in options)) {
+      options.canBeTaken = false;
+    }
+    if (!('destination' in options)) {
+      options.destination = null;
+    }
+
+    // an exit should have a location and a... direction?
+    // an exit has a location, a direction, and a destination (right?)
+    // maybe it's not an item
+    // an exit naturally JOINS two locations
+    // so, something like
+    // door: from room south to bedroom, from bedroom north to room
+    // slide: from tunnel east to pit, from pit up to tunnel
+    Item.call(this, options);
+
+    // the exit is just a 
+    // FINE. an exit has a location, direction, and destination
+
+    //  It has an OPTIONAL reverseDirection, which means it will...
+    // also be visible in the destination going the reverseDirection to the location.
+    // so, if an item is an exit with a reverseDirection, you can see it in its location AND its destination.
+    // when itemizing contents
+
+  }
+  Exit.prototype = Object.create(Item.prototype);
+  A.Exit = Exit;
 
   function interpretInput(subject, str) {
     str = str.toLowerCase().replace(/[^a-z0-9 ]/g, '');
