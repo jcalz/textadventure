@@ -4,8 +4,6 @@
 //TODO default bidirectional exits.
 //TODO limit to inventory?
 //TODO "jump"
-//TODO "markCommonlyImmutablePropertiesImmutable" is horrible and should be replaced,
-//      when the initializer is better, or with some other way.  
 //TODO in Item, merge rest of options.... make Person and Place just subclasses I guess?
 
 function Adventure() {
@@ -596,10 +594,9 @@ function Adventure() {
     if (!('canBeTaken' in options)) {
       options.canBeTaken = false;
     }
-    if (!('destination' in options)) {
-      options.destination = null;
-    }
-
+    options.direction = (options.direction instanceof MutabilityMarker) ? options.direction : immutable(options.direction);
+    options.destination = (options.destination instanceof MutabilityMarker) ? options.destination : immutable(options.destination);
+    
     // an exit should have a location and a... direction?
     // an exit has a location, a direction, and a destination (right?)
     // maybe it's not an item
