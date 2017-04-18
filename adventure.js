@@ -134,12 +134,17 @@ function Adventure() {
       };
     }
     options = options || {};
+    options.name = options.name || options.id || 'item';
+
     if (options.id && options.id in itemMap) throw new Error('cannot reuse id "' + options.id + '"');
-    var id = options.id || getNewId('item');
+
+    var baseId = options.id || options.name || 'item';
+
+    var id = getNewId(baseId);
     this.id = id;
     itemMap[id] = this;
 
-    var name = options.name || id;
+    var name = options.name;
 
     // prevent a property from being saved/loaded as state or modified
     var immutableProperties = {
@@ -150,12 +155,27 @@ function Adventure() {
       return immutableProperties;
     };
 
+    var pluralName = name;
+    if (options.plural) {
+      pluralName = name;
+    } else if ((/[^aeiou]y$/i).test(name)) {
+      pluralName = name.substring(0, name.length - 1) + 'ies';
+    } else if ((/(s|x|z|ch|sh)$/i).test(name)) {
+      pluralName = name + 'es';
+    } else {
+      pluralName = name + 's';
+    }
+
     var defaultOptions = {
       name: immutable(name), // base name, no articles, in lower case unless always capitalized, best to be unique
       description: immutable(null), // optional string when you examine item
       keywords: immutable([name]), // words to identify item, best to be unique
+      plural: immutable(false),
       definiteName: immutable('the ' + name),
-      indefiniteName: immutable(('aeiou'.indexOf(name.charAt(0).toLowerCase()) >= 0 ? 'an ' : 'a ') + name),
+      indefiniteName: immutable(options.plural ? name : ('aeiou'.indexOf(name.charAt(0).toLowerCase()) >= 0 ? 'an ' :
+        'a ') + name),
+      pluralName: immutable(pluralName),
+      it: immutable(options.plural ? 'they' : 'it'),
       canBeTaken: immutable(true), // can be picked up
       location: mutable(null), // initial location
       known: mutable(false), // have you seen this yet
@@ -251,33 +271,52 @@ function Adventure() {
     if (subject.location === here) {
       ret += titleCase(this.name) + '\n';
     }
-    ret += (this.description || 'It\'s just ' + this.indefiniteName + '.');
+    ret += (this.description || capitalize(this.it) + (this.plural ? "'re" : "'s") + ' just ' + this.indefiniteName +
+      '.');
+
+    // describe exits
     var exits = this.getExits();
     if (exits.length > 0) {
-      var es = exits.map(function(ex) {
-        return ex.direction;
+      var exitTypes = {};
+      exits.forEach(function(ex) {
+        var type = ex.pluralName;
+        if (!(type in exitTypes)) {
+          exitTypes[type] = {
+            single: ex.indefiniteName,
+            multiple: ex.pluralName,
+            directions: []
+          };
+        }
+        exitTypes[type].directions.push(ex.direction);
       });
-      if (subject.location === here) {
-        ret += ' There ';
-        ret += es.length == 1 ? 'is an exit' : 'are exits';
-      } else {
-        ret += ' It has ';
-        ret += es.length == 1 ? 'an exit' : 'exits';
-      }
-      ret += ' leading ';
-      ret += series(es);
-      ret += '.';
+      Object.keys(exitTypes).forEach(function(type) {
+        if (subject.location === here) {
+          ret += ' There ';
+          ret += exitTypes[type].directions.length == 1 ? 'is ' + exitTypes[type].single : 'are ' + exitTypes[
+            type].multiple;
+        } else {
+          ret += ' ' + capitalize(this.it) + ' ' + (this.plural ? ' have ' : ' has ');
+          ret += exitTypes[type].directions.length == 1 ? exitTypes[type].single : exitTypes[type].multiple;
+        }
+        ret += ' leading ';
+        ret += series(exitTypes[type].directions);
+        ret += '.';
+      });
     }
+
+    // describe non-exits
     var items = this.listContents().filter(function(it) {
       return !(it instanceof Exit);
-    }).map(function(it) {
+    });
+    var itemNames = items.map(function(it) {
       return it.indefiniteName;
     });
     if (items.length > 0) {
       if (subject.location === here) {
-        ret += ' ' + capitalize(series(items)) + (items.length > 1 ? ' are' : ' is') + ' here.';
+        ret += ' ' + capitalize(series(itemNames)) + ((items.length > 1 || items[0].plural) ? ' are' : ' is') +
+          ' here.';
       } else {
-        ret += ' It contains ' + series(items) + '.';
+        ret += ' ' + capitalize(this.it) + ' contain' + (this.plural ? '' : 's') + ' ' + series(itemNames) + '.';
       }
     }
     return ret;
@@ -329,14 +368,13 @@ function Adventure() {
     return subject.has(this);
   };
 
-  Item.prototype.exitedBy = function(subject, dir) {
+  Item.prototype.beExitedBy = function(subject, dir) {
     var exit = this.getExits().find(function(ex) {
       return ex.direction === dir;
     });
     if (!exit)
       return "You can't go " + dir + " from here.";
-    subject.location = exit.destination;
-    return subject.look();
+    return subject.use(exit);
   };
 
   Item.prototype.superMethod = function(name) {
@@ -384,14 +422,14 @@ function Adventure() {
     });
   };
 
-  Item.prototype.newBackgroundItem = function(name, keywords) {
-    var options = {
-      name: name,
-      keywords: keywords ? keywords : [],
-      unlisted: true,
-      canBeTaken: false,
-      location: this
-    };
+  Item.prototype.newBackgroundItem = function(options) {
+    options = options || {};
+    if (!('unlisted' in options))
+      options.unlisted = true;
+    if (!('canBeTaken' in options))
+      options.canBeTaken = false;
+    if (!('location' in options))
+      options.location = this;
     return new Item(options);
   };
 
@@ -404,12 +442,7 @@ function Adventure() {
       };
     }
     options = options || {};
-    if (!('id' in options)) {
-      options.id = getNewId('place');
-    }
-    if (!('name' in options)) {
-      options.name = options.id;
-    }
+    options.name = options.name || options.id || 'place';
     if (!('canBeTaken' in options)) {
       options.canBeTaken = false;
     }
@@ -425,12 +458,7 @@ function Adventure() {
       };
     }
     options = options || {};
-    if (!('id' in options)) {
-      options.id = getNewId('person');
-    }
-    if (!('name' in options)) {
-      options.name = options.id;
-    }
+    options.name = options.name || options.id || 'person';
     if (!('indefiniteName' in options)) {
       options.indefiniteName = options.name;
     }
@@ -439,6 +467,9 @@ function Adventure() {
     }
     if (!('canBeTaken' in options)) {
       options.canBeTaken = false;
+    }
+    if (!('it' in options)) {
+      options.it = 'she';
     }
     Item.call(this, options);
 
@@ -467,7 +498,7 @@ function Adventure() {
       if (!this.location) {
         return "You can't go " + dir + " from here.";
       }
-      return this.location.exitedBy(this, dir);
+      return this.location.beExitedBy(this, dir);
     }
     go.templates = ['go ?d1', '?d1', 'move ?d1', 'walk ?d1'];
     go.help = 'Go in the specified direction, like North or South.';
@@ -518,7 +549,7 @@ function Adventure() {
 
     var help = function help() {
       var ret = '';
-      ret += 'Need help?  Here are some commands:\n';
+      ret += 'Need help?  Here are some commands:\n\n';
       ret += this.commands().filter(function(c) {
         return c.help;
       }).map(function(c) {
@@ -531,7 +562,7 @@ function Adventure() {
           '")' :
           '');
       }).join('\n');
-      ret += '\nGood luck!';
+      ret += '\n\nThere are other commands not listed here.  Try stuff out.  Good luck!';
       return ret;
     };
     help.templates = ['help', 'h', 'help me'];
@@ -547,6 +578,9 @@ function Adventure() {
         'l at ?i1'
       ],
       'Examine an item.');
+
+    this.addCommand('use', 'beUsedBy', ['use ?i1', 'use ?i1 with ?i2', 'use ?i1 on ?i2'], 'Use an item in some way.');
+
   }
   Person.prototype = Object.create(Item.prototype);
   A.Person = Person;
@@ -558,12 +592,7 @@ function Adventure() {
       };
     }
     options = options || {};
-    if (!('id' in options)) {
-      options.id = getNewId('exit');
-    }
-    if (!('name' in options)) {
-      options.name = options.id;
-    }
+    options.name = options.name || options.id || 'exit';
     if (!('canBeTaken' in options)) {
       options.canBeTaken = false;
     }
@@ -590,6 +619,11 @@ function Adventure() {
 
   }
   Exit.prototype = Object.create(Item.prototype);
+  Exit.prototype.beUsedBy = function(subject) {
+    var ret = 'You use ' + this.definiteName + ' leading ' + this.direction + '.\n\n';
+    subject.location = this.destination;
+    return ret + subject.look();
+  };
   A.Exit = Exit;
 
   function interpretInput(subject, str) {
