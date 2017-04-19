@@ -1,10 +1,14 @@
 "use strict";
-//TODO flesh out exits: description, hidden, etc
-//TODO "put ___ in/on ____"
-//TODO default bidirectional exits.
+
+//clean up proxy
+//TODO bidirectional exits (two exits with a proxy for the last one)
 //TODO limit to inventory?
+//TODO make parsing items try to find exits or items by checking for direction words plus item name
+//   e.g., dir: north, item: door: "the northern door" or "north door", or "door to the north", or "door leading north", etc
+//TODO maybe ambiguous items should be a warning error rather than first-found...
 //TODO "jump"
-//TODO in Item, merge rest of options.... make Person and Place just subclasses I guess?
+//TODO "put ___ in/on ____"
+
 
 function Adventure() {
 
@@ -19,6 +23,8 @@ function Adventure() {
     });
   };
 
+  
+  
   // string manipulation functions    
   function capitalize(str) {
     return str.charAt(0).toUpperCase() + str.slice(1);
@@ -42,18 +48,30 @@ function Adventure() {
     this.object = object;
   }
 
-  function mutable(obj) {
-    if (obj instanceof MutabilityMarker) throw new Error('already marked');
+  function mutable(obj, enforceIfWrapped) {
+    if (obj instanceof MutabilityMarker) {
+        if (!enforceIfWrapped) return obj;
+        obj = obj.object;
+    }
     return new MutabilityMarker(true, obj);
   }
   A.mutable = mutable;
 
-  function immutable(obj) {
-    if (obj instanceof MutabilityMarker) throw new Error('already marked');
+  function immutable(obj, enforceIfWrapped) {
+    if (obj instanceof MutabilityMarker) {
+        if (!enforceIfWrapped) return obj;
+        obj = obj.object;
+    }
     return new MutabilityMarker(false, obj);
   }
   A.immutable = immutable;
 
+  function unwrap(obj) {
+    if (obj instanceof MutabilityMarker)
+        return obj.object;
+    return obj;
+  }
+  
   var directions = {
     north: ['n'],
     south: ['s'],
@@ -74,6 +92,15 @@ function Adventure() {
     });
   });
 
+  var oppositeDirections = {
+    north: 'south',
+    east: 'west',
+    northeast: 'southwest',
+    northwest: 'southeast',
+    up: 'down'    
+  }
+  Object.keys(oppositeDirections).forEach(function(dir){oppositeDirections[oppositeDirections[dir]]=dir;});
+  
   // KEEP A MAP OF ALL ITEMS IN THE ADVENTURE
   var itemMap = {};
 
@@ -431,7 +458,7 @@ function Adventure() {
     return new Item(options);
   };
 
-  A.Item = Item;
+  A.newItem = function(options){return new Item(options)};
 
   function Place(options) {
     if (typeof options === 'string') {
@@ -447,7 +474,7 @@ function Adventure() {
     Item.call(this, options);
   }
   Place.prototype = Object.create(Item.prototype);
-  A.Place = Place;
+  A.newPlace = function(options){return new Place(options)};
 
   function Person(options) {
     if (typeof options === 'string') {
@@ -581,7 +608,7 @@ function Adventure() {
 
   }
   Person.prototype = Object.create(Item.prototype);
-  A.Person = Person;
+  A.newPerson = function(options){return new Person(options)};
 
   function Exit(options) {
     if (typeof options === 'string') {
@@ -594,35 +621,35 @@ function Adventure() {
     if (!('canBeTaken' in options)) {
       options.canBeTaken = false;
     }
-    options.direction = (options.direction instanceof MutabilityMarker) ? options.direction : immutable(options.direction);
-    options.destination = (options.destination instanceof MutabilityMarker) ? options.destination : immutable(options.destination);
+    options.direction = immutable(options.direction);
+    options.destination = immutable(options.destination);    
     
-    // an exit should have a location and a... direction?
-    // an exit has a location, a direction, and a destination (right?)
-    // maybe it's not an item
-    // an exit naturally JOINS two locations
-    // so, something like
-    // door: from room south to bedroom, from bedroom north to room
-    // slide: from tunnel east to pit, from pit up to tunnel
+    /*
+    options.reverseDirection = immutable(options.reverseDirection || oppositeDirections[unwrap(options.direction)]);
+    
+    // make 
+    options.forwardExit = immutable(options.forwardExit || this);
+    
+    
+    options.forward = immutable(true);
+
+    options.reverseExit =  
+    
+    var reverseOptions = options;
+    */
     Item.call(this, options);
-
-    // the exit is just a 
-    // FINE. an exit has a location, direction, and destination
-
-    //  It has an OPTIONAL reverseDirection, which means it will...
-    // also be visible in the destination going the reverseDirection to the location.
-    // so, if an item is an exit with a reverseDirection, you can see it in its location AND its destination.
-    // when itemizing contents
-
   }
+  
+  
   Exit.prototype = Object.create(Item.prototype);
   Exit.prototype.beUsedBy = function(subject) {
     var ret = 'You use ' + this.definiteName + ' leading ' + this.direction + '.\n\n';
     subject.location = this.destination;
     return ret + subject.look();
   };
-  A.Exit = Exit;
+  A.newExit = function(options){return new Exit(options)};
 
+  
   function interpretInput(subject, str) {
     str = str.toLowerCase().replace(/[^a-z0-9 ]/g, '');
     str = str.replace(/\s+/g, ' ').trim();
@@ -768,3 +795,60 @@ function Adventure() {
   A.respond = respond;
 
 };
+
+
+'use strict';
+
+var original = { id: 'original', location: 'here', direction: 'east',
+  reverseDirection: 'west', destination: 'there', reverseId: 'reverse',
+  isForward: true, isReverse: false, open: true };
+original.hey = function(){return this.id + ' says hey!';};
+  
+var reverseMap = { id: 'reverseId', location: 'destination', direction: 'reverseDirection',
+  isForward: 'isReverse' };
+Object.keys(reverseMap).forEach(function (k) {
+  reverseMap[reverseMap[k]] = k;
+});
+
+// Static Proxy polyfill that only handles get and set for existing values... 
+// Makes me sad that we have to do this to handle ES5
+var myProxy = //Proxy || 
+  function(target, handler) {  
+  var proxyType = function(){};
+  proxyType.prototype = target; // so immutable things added to parent will keep working
+  
+  var proxy = new proxyType();
+  Object.keys(target).forEach(function(k){
+    var h = {enumerable: true, configurable: false};
+    if ('get' in handler) {
+       h.get = function(){return handler.get(target, k);};
+    }
+    if ('set' in handler) {
+       h.set = function(v){return handler.set(target, k, v);};
+    }
+    Object.defineProperty(proxy, k, h);
+  });  
+  Object.seal(proxy);
+  return proxy;
+};  
+
+var reverse = new myProxy(original, {
+
+  get: function get(target, name) {
+
+    var reverseName = reverseMap[name];
+    if (reverseName) return target[reverseName];
+    return target[name];
+  },
+
+  set: function set(target, name, value) {
+    var reverseName = reverseMap[name];
+    if (reverseName) {
+      target[reverseName] = value;
+    } else {
+      target[name] = value;
+    }
+    return true;
+  }
+
+});
