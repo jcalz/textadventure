@@ -23,6 +23,28 @@ function Adventure() {
     });
   };
 
+  // Static Proxy polyfill that only handles get and set for existing values... 
+  // Makes me sad that we have to do this to handle ES5
+var myProxy = (typeof Proxy === 'function') ? Proxy : 
+  function(target, handler) {  
+  var proxyType = function(){};
+  proxyType.prototype = target; // so immutable things added to parent will keep working
+  
+  var proxy = new proxyType();
+  Object.keys(target).forEach(function(k){
+    var h = {enumerable: true, configurable: false};
+    if ('get' in handler) {
+       h.get = function(){return handler.get(target, k);};
+    }
+    if ('set' in handler) {
+       h.set = function(v){return handler.set(target, k, v);};
+    }
+    Object.defineProperty(proxy, k, h);
+  });  
+  Object.seal(proxy);
+  return proxy;
+};  
+
   
   
   // string manipulation functions    
@@ -158,30 +180,31 @@ function Adventure() {
         id: options
       };
     }
-    options = options || {};
-    options.name = options.name || options.id || 'item';
-
-    if (options.id && options.id in itemMap) throw new Error('cannot reuse id "' + options.id + '"');
-
-    var baseId = options.id || options.name || 'item';
-
+    options = Object.assign({},options || {});
+    
+    var name = unwrap(options.name) || unwrap(options.id) || 'item';
+    options.name = immutable( options.name || name );
+   
+    if (options.id && unwrap(options.id) in itemMap) throw new Error('cannot reuse id "' + unwrap(options.id) + '"');
+       
+    var baseId = unwrap(options.id) || name || 'item';
     var id = getNewId(baseId);
-    this.id = id;
-    itemMap[id] = this;
+    options.id = immutable(id);
 
-    var name = options.name;
+    itemMap[id] = this;
 
     // prevent a property from being saved/loaded as state or modified
     var immutableProperties = {
-      'id': true
     };
 
     this.getImmutableProperties = function() {
       return immutableProperties;
     };
 
+    var plural = unwrap(options.plural);
+    
     var pluralName = name;
-    if (options.plural) {
+    if (plural) {
       pluralName = name;
     } else if ((/[^aeiou]y$/i).test(name)) {
       pluralName = name.substring(0, name.length - 1) + 'ies';
@@ -191,76 +214,58 @@ function Adventure() {
       pluralName = name + 's';
     }
 
-    var defaultOptions = {
-      name: immutable(name), // base name, no articles, in lower case unless always capitalized, best to be unique
-      description: immutable(null), // optional string when you examine item
-      keywords: immutable([name]), // words to identify item, best to be unique
-      plural: immutable(false),
-      definiteName: immutable('the ' + name),
-      indefiniteName: immutable(options.plural ? name : ('aeiou'.indexOf(name.charAt(0).toLowerCase()) >= 0 ? 'an ' :
-        'a ') + name),
-      pluralName: immutable(pluralName),
-      it: immutable(options.plural ? 'they' : 'it'),
-      canBeTaken: immutable(true), // can be picked up
-      location: mutable(null), // initial location
-      known: mutable(false), // have you seen this yet
-      hidden: mutable(false), // is it hidden
-    }
-
-    Object.keys(defaultOptions).forEach(function(prop) {
-      var v = defaultOptions[prop];
+    options.description = immutable(options.description || null);
+    options.keywords = immutable(options.keywords || [name]);
+    options.plural = immutable('plural' in options ? options.plural : false);
+    options.definiteName = immutable(options.definiteName || ('the ' + name));
+    options.indefiniteName = immutable(options.indefiniteName || (plural ? name : ('aeiou'.indexOf(name.charAt(0).toLowerCase()) >= 0 ? 'an ' :
+        'a ') + name));
+    options.pluralName = immutable(options.pluralName || pluralName);
+    options.it = immutable(options.it || (plural ? 'they' : 'it'));
+    options.canBeTaken = immutable('canBeTaken' in options ? options.canBeTaken : true);
+    options.location = mutable(options.location || null);
+    options.known = mutable('known' in options ? options.known : false);
+    options.hidden = mutable('hidden' in options ? options.hidden : false);
+    
+    Object.keys(options).forEach(function(prop) {
+      var v = options[prop];
       var immutable = false;
       if (v instanceof MutabilityMarker) {
         immutable = !v.mutable;
         v = v.object;
       }
-      immutableProperties[prop] = immutable;
-      item[prop] = v;
-    });
-
-    Object.keys(options).forEach(function(prop) {
-      var v = options[prop];
-      var immutable = !!immutableProperties[prop];
-      if (v instanceof MutabilityMarker) {
-        immutable = !v.mutable;
-        v = v.object;
-      }
-      if (typeof v !== 'function') {
-        immutableProperties[prop] = immutable;
+      if (immutable) {
+        immutableProperties[prop] = true;
       }
       item[prop] = v;
     });
 
+    var o = {configurable: false,
+        enumerable: true,
+        writable: false
+        };
     // make immutable properties immutable
     Object.keys(immutableProperties).forEach(function(prop) {
-      var o = {
-        configurable: false,
+      if (prop==='location') return;
+      Object.defineProperty(item, prop, o);
+    });
+
+    var location = item.location;
+    o = {configurable: false,
         enumerable: true,
-        writable: !immutableProperties[prop]
-      };
-      if (prop === 'location') {
-        var location = item[prop];
-        o.get = function() {
+        get : function() {
           var ret = location;
           if (typeof location === 'string') ret = itemMap[location];
           if (!ret) ret = null;
           return ret;
-        };
-        if (o.writable) {
-          delete o.writable;
-          o.set = function(l) {
-            location = l;
-          };
         }
-      }
-      Object.defineProperty(item, prop, o);
-    });
-
-    Object.keys(immutableProperties).forEach(function(prop) {
-      if (!immutableProperties[prop]) {
-        delete(immutableProperties[prop]);
-      }
-    });
+    };
+    if (!immutableProperties.location) {
+        o.set = function(l) {location = l;};
+    }
+    
+        Object.defineProperty(item, 'location', o);
+      
 
   };
 
@@ -466,10 +471,11 @@ function Adventure() {
         id: options
       };
     }
-    options = options || {};
-    options.name = options.name || options.id || 'place';
+    options = Object.assign({},options || {});
+    var name = unwrap(options.name) || unwrap(options.id) || 'place';
+    options.name = immutable(options.name || name);
     if (!('canBeTaken' in options)) {
-      options.canBeTaken = false;
+      options.canBeTaken = immutable(false);
     }
     Item.call(this, options);
   }
@@ -482,19 +488,20 @@ function Adventure() {
         id: options
       };
     }
-    options = options || {};
-    options.name = options.name || options.id || 'person';
+    options = Object.assign({},options || {});
+    var name = unwrap(options.name) || unwrap(options.id) || 'person';
+    options.name = immutable(options.name || name); 
     if (!('indefiniteName' in options)) {
-      options.indefiniteName = options.name;
+      options.indefiniteName = immutable(options.name);
     }
     if (!('definiteName' in options)) {
-      options.definiteName = options.name;
+      options.definiteName = immutable(options.name);
     }
     if (!('canBeTaken' in options)) {
-      options.canBeTaken = false;
+      options.canBeTaken = immutable(false);
     }
     if (!('it' in options)) {
-      options.it = 'she';
+      options.it = immutable('she');
     }
     Item.call(this, options);
 
@@ -616,27 +623,48 @@ function Adventure() {
         id: options
       };
     }
-    options = options || {};
-    options.name = options.name || options.id || 'exit';
+    options = Object.assign({},options || {});
+    var name = unwrap(options.name) || unwrap(options.id) || 'exit';
+    options.name = immutable(options.name || name);
     if (!('canBeTaken' in options)) {
-      options.canBeTaken = false;
+      options.canBeTaken = immutable(false);
     }
+    options.location = immutable(options.location);
     options.direction = immutable(options.direction);
     options.destination = immutable(options.destination);    
+    options.reverseDirection = immutable(options.reverseDirection);
+    if (('reverseId' in options) && (unwrap(options.reverseid) in itemMap)) throw new Error('Cannot reuse id '+unwrap(options.reverseId)+' for reverseId');    
+    options.reverseId = immutable(options.reverseId || getNewId(name+'-reverse'));
+    options.isForwardExit = immutable(true);
+    options.isReverseExit = immutable(false);
+    options.forwardExit = immutable(this);
+    //options.reverseExit = don't have Id yet
     
-    /*
-    options.reverseDirection = immutable(options.reverseDirection || oppositeDirections[unwrap(options.direction)]);
-    
-    // make 
-    options.forwardExit = immutable(options.forwardExit || this);
-    
-    
-    options.forward = immutable(true);
 
-    options.reverseExit =  
-    
-    var reverseOptions = options;
-    */
+/*    
+        
+    var reverse = new myProxy(original, {
+
+  get: function get(target, name) {
+
+    var reverseName = reverseMap[name];
+    if (reverseName) return target[reverseName];
+    return target[name];
+  },
+
+  set: function set(target, name, value) {
+    var reverseName = reverseMap[name];
+    if (reverseName) {
+      target[reverseName] = value;
+    } else {
+      target[name] = value;
+    }
+    return true;
+  }
+
+});
+
+  */  
     Item.call(this, options);
   }
   
@@ -810,28 +838,7 @@ Object.keys(reverseMap).forEach(function (k) {
   reverseMap[reverseMap[k]] = k;
 });
 
-// Static Proxy polyfill that only handles get and set for existing values... 
-// Makes me sad that we have to do this to handle ES5
-var myProxy = //Proxy || 
-  function(target, handler) {  
-  var proxyType = function(){};
-  proxyType.prototype = target; // so immutable things added to parent will keep working
-  
-  var proxy = new proxyType();
-  Object.keys(target).forEach(function(k){
-    var h = {enumerable: true, configurable: false};
-    if ('get' in handler) {
-       h.get = function(){return handler.get(target, k);};
-    }
-    if ('set' in handler) {
-       h.set = function(v){return handler.set(target, k, v);};
-    }
-    Object.defineProperty(proxy, k, h);
-  });  
-  Object.seal(proxy);
-  return proxy;
-};  
-
+/*
 var reverse = new myProxy(original, {
 
   get: function get(target, name) {
@@ -852,3 +859,4 @@ var reverse = new myProxy(original, {
   }
 
 });
+*/
