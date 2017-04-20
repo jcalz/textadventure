@@ -240,7 +240,7 @@
       return date.toString();
     };
 
-    var gameVersion = 'b';
+    var gameVersion = '-v0';
     var autosaveKey = 'autosave' + gameVersion;
 
     $(function() {
@@ -365,23 +365,15 @@
     adventure.newExit({
       location: room,
       direction: 'north',
-      destination: closet
-    });
-    adventure.newExit({
-      location: closet,
-      direction: 'south',
-      destination: room
+      destination: closet,
+      reverseDirection: true
     });
 
     adventure.newExit({
       location: room,
       direction: 'south',
-      destination: bedroom
-    });
-    adventure.newExit({
-      location: bedroom,
-      direction: 'north',
-      destination: room
+      destination: bedroom,
+      reverseDirection: true
     });
 
     var hiddenExit = adventure.newExit({
@@ -390,23 +382,15 @@
       location: closet,
       direction: 'east',
       destination: tunnel,
+      reverseDirection: true,
       hidden: true
-    });
-    adventure.newExit({
-      location: tunnel,
-      direction: 'west',
-      destination: closet
     });
 
     adventure.newExit({
       location: tunnel,
       direction: 'east',
-      destination: pit
-    });
-    adventure.newExit({
-      location: pit,
-      direction: 'up',
-      destination: tunnel
+      destination: pit,
+      reverseDirection: 'up'
     });
 
     you.location = room;

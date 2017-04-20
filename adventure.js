@@ -1,14 +1,11 @@
 "use strict";
 
-//clean up proxy
-//TODO bidirectional exits (two exits with a proxy for the last one)
 //TODO limit to inventory?
 //TODO make parsing items try to find exits or items by checking for direction words plus item name
 //   e.g., dir: north, item: door: "the northern door" or "north door", or "door to the north", or "door leading north", etc
 //TODO maybe ambiguous items should be a warning error rather than first-found...
 //TODO "jump"
 //TODO "put ___ in/on ____"
-
 
 function Adventure() {
 
@@ -23,30 +20,6 @@ function Adventure() {
     });
   };
 
-  // Static Proxy polyfill that only handles get and set for existing values... 
-  // Makes me sad that we have to do this to handle ES5
-var myProxy = (typeof Proxy === 'function') ? Proxy : 
-  function(target, handler) {  
-  var proxyType = function(){};
-  proxyType.prototype = target; // so immutable things added to parent will keep working
-  
-  var proxy = new proxyType();
-  Object.keys(target).forEach(function(k){
-    var h = {enumerable: true, configurable: false};
-    if ('get' in handler) {
-       h.get = function(){return handler.get(target, k);};
-    }
-    if ('set' in handler) {
-       h.set = function(v){return handler.set(target, k, v);};
-    }
-    Object.defineProperty(proxy, k, h);
-  });  
-  Object.seal(proxy);
-  return proxy;
-};  
-
-  
-  
   // string manipulation functions    
   function capitalize(str) {
     return str.charAt(0).toUpperCase() + str.slice(1);
@@ -72,8 +45,8 @@ var myProxy = (typeof Proxy === 'function') ? Proxy :
 
   function mutable(obj, enforceIfWrapped) {
     if (obj instanceof MutabilityMarker) {
-        if (!enforceIfWrapped) return obj;
-        obj = obj.object;
+      if (!enforceIfWrapped) return obj;
+      obj = obj.object;
     }
     return new MutabilityMarker(true, obj);
   }
@@ -81,8 +54,8 @@ var myProxy = (typeof Proxy === 'function') ? Proxy :
 
   function immutable(obj, enforceIfWrapped) {
     if (obj instanceof MutabilityMarker) {
-        if (!enforceIfWrapped) return obj;
-        obj = obj.object;
+      if (!enforceIfWrapped) return obj;
+      obj = obj.object;
     }
     return new MutabilityMarker(false, obj);
   }
@@ -90,10 +63,10 @@ var myProxy = (typeof Proxy === 'function') ? Proxy :
 
   function unwrap(obj) {
     if (obj instanceof MutabilityMarker)
-        return obj.object;
+      return obj.object;
     return obj;
   }
-  
+
   var directions = {
     north: ['n'],
     south: ['s'],
@@ -119,10 +92,12 @@ var myProxy = (typeof Proxy === 'function') ? Proxy :
     east: 'west',
     northeast: 'southwest',
     northwest: 'southeast',
-    up: 'down'    
+    up: 'down'
   }
-  Object.keys(oppositeDirections).forEach(function(dir){oppositeDirections[oppositeDirections[dir]]=dir;});
-  
+  Object.keys(oppositeDirections).forEach(function(dir) {
+    oppositeDirections[oppositeDirections[dir]] = dir;
+  });
+
   // KEEP A MAP OF ALL ITEMS IN THE ADVENTURE
   var itemMap = {};
 
@@ -168,10 +143,6 @@ var myProxy = (typeof Proxy === 'function') ? Proxy :
   };
   A.deserialize = deserialize;
 
-  A.commonlyImmutableProperties = ['name', 'description', 'keywords', 'definiteName', 'indefiniteName', 'canBeTaken',
-    'id', 'unlisted'
-  ];
-
   function Item(options) {
     var item = this;
     this.adventure = A;
@@ -180,13 +151,13 @@ var myProxy = (typeof Proxy === 'function') ? Proxy :
         id: options
       };
     }
-    options = Object.assign({},options || {});
-    
+    options = Object.assign({}, options || {});
+
     var name = unwrap(options.name) || unwrap(options.id) || 'item';
-    options.name = immutable( options.name || name );
-   
+    options.name = immutable(options.name || name);
+
     if (options.id && unwrap(options.id) in itemMap) throw new Error('cannot reuse id "' + unwrap(options.id) + '"');
-       
+
     var baseId = unwrap(options.id) || name || 'item';
     var id = getNewId(baseId);
     options.id = immutable(id);
@@ -194,15 +165,14 @@ var myProxy = (typeof Proxy === 'function') ? Proxy :
     itemMap[id] = this;
 
     // prevent a property from being saved/loaded as state or modified
-    var immutableProperties = {
-    };
+    var immutableProperties = {};
 
     this.getImmutableProperties = function() {
       return immutableProperties;
     };
 
     var plural = unwrap(options.plural);
-    
+
     var pluralName = name;
     if (plural) {
       pluralName = name;
@@ -218,15 +188,16 @@ var myProxy = (typeof Proxy === 'function') ? Proxy :
     options.keywords = immutable(options.keywords || [name]);
     options.plural = immutable('plural' in options ? options.plural : false);
     options.definiteName = immutable(options.definiteName || ('the ' + name));
-    options.indefiniteName = immutable(options.indefiniteName || (plural ? name : ('aeiou'.indexOf(name.charAt(0).toLowerCase()) >= 0 ? 'an ' :
-        'a ') + name));
+    options.indefiniteName = immutable(options.indefiniteName || (plural ? name : ('aeiou'.indexOf(name.charAt(0).toLowerCase()) >=
+      0 ? 'an ' :
+      'a ') + name));
     options.pluralName = immutable(options.pluralName || pluralName);
     options.it = immutable(options.it || (plural ? 'they' : 'it'));
     options.canBeTaken = immutable('canBeTaken' in options ? options.canBeTaken : true);
     options.location = mutable(options.location || null);
     options.known = mutable('known' in options ? options.known : false);
     options.hidden = mutable('hidden' in options ? options.hidden : false);
-    
+
     Object.keys(options).forEach(function(prop) {
       var v = options[prop];
       var immutable = false;
@@ -240,32 +211,35 @@ var myProxy = (typeof Proxy === 'function') ? Proxy :
       item[prop] = v;
     });
 
-    var o = {configurable: false,
-        enumerable: true,
-        writable: false
-        };
+    var o = {
+      configurable: false,
+      enumerable: true,
+      writable: false
+    };
     // make immutable properties immutable
     Object.keys(immutableProperties).forEach(function(prop) {
-      if (prop==='location') return;
+      if (prop === 'location') return;
       Object.defineProperty(item, prop, o);
     });
 
     var location = item.location;
-    o = {configurable: false,
-        enumerable: true,
-        get : function() {
-          var ret = location;
-          if (typeof location === 'string') ret = itemMap[location];
-          if (!ret) ret = null;
-          return ret;
-        }
+    o = {
+      configurable: false,
+      enumerable: true,
+      get: function() {
+        var ret = location;
+        if (typeof location === 'string') ret = itemMap[location];
+        if (!ret) ret = null;
+        return ret;
+      }
     };
     if (!immutableProperties.location) {
-        o.set = function(l) {location = l;};
+      o.set = function(l) {
+        location = l;
+      };
     }
-    
-        Object.defineProperty(item, 'location', o);
-      
+
+    Object.defineProperty(item, 'location', o);
 
   };
 
@@ -463,7 +437,9 @@ var myProxy = (typeof Proxy === 'function') ? Proxy :
     return new Item(options);
   };
 
-  A.newItem = function(options){return new Item(options)};
+  A.newItem = function(options) {
+    return new Item(options)
+  };
 
   function Place(options) {
     if (typeof options === 'string') {
@@ -471,7 +447,7 @@ var myProxy = (typeof Proxy === 'function') ? Proxy :
         id: options
       };
     }
-    options = Object.assign({},options || {});
+    options = Object.assign({}, options || {});
     var name = unwrap(options.name) || unwrap(options.id) || 'place';
     options.name = immutable(options.name || name);
     if (!('canBeTaken' in options)) {
@@ -480,7 +456,9 @@ var myProxy = (typeof Proxy === 'function') ? Proxy :
     Item.call(this, options);
   }
   Place.prototype = Object.create(Item.prototype);
-  A.newPlace = function(options){return new Place(options)};
+  A.newPlace = function(options) {
+    return new Place(options)
+  };
 
   function Person(options) {
     if (typeof options === 'string') {
@@ -488,9 +466,9 @@ var myProxy = (typeof Proxy === 'function') ? Proxy :
         id: options
       };
     }
-    options = Object.assign({},options || {});
+    options = Object.assign({}, options || {});
     var name = unwrap(options.name) || unwrap(options.id) || 'person';
-    options.name = immutable(options.name || name); 
+    options.name = immutable(options.name || name);
     if (!('indefiniteName' in options)) {
       options.indefiniteName = immutable(options.name);
     }
@@ -615,7 +593,31 @@ var myProxy = (typeof Proxy === 'function') ? Proxy :
 
   }
   Person.prototype = Object.create(Item.prototype);
-  A.newPerson = function(options){return new Person(options)};
+  A.newPerson = function(options) {
+    return new Person(options)
+  };
+
+  var exitReverseProperties = {
+    id: 'reverseId',
+    location: 'destination',
+    direction: 'reverseDirection',
+    isForwardExit: 'isReverseExit'
+  };
+  Object.keys(exitReverseProperties).forEach(function(k) {
+    exitReverseProperties[exitReverseProperties[k]] = k;
+  });
+
+  var exitReverseHandler = {
+
+    get: function get(target, name) {
+
+    },
+
+    set: function set(target, name, value) {
+      target[exitReverseProperties[name] || name] = value;
+      return true;
+    }
+  };
 
   function Exit(options) {
     if (typeof options === 'string') {
@@ -623,7 +625,7 @@ var myProxy = (typeof Proxy === 'function') ? Proxy :
         id: options
       };
     }
-    options = Object.assign({},options || {});
+    options = Object.assign({}, options || {});
     var name = unwrap(options.name) || unwrap(options.id) || 'exit';
     options.name = immutable(options.name || name);
     if (!('canBeTaken' in options)) {
@@ -631,53 +633,73 @@ var myProxy = (typeof Proxy === 'function') ? Proxy :
     }
     options.location = immutable(options.location);
     options.direction = immutable(options.direction);
-    options.destination = immutable(options.destination);    
-    options.reverseDirection = immutable(options.reverseDirection);
-    if (('reverseId' in options) && (unwrap(options.reverseid) in itemMap)) throw new Error('Cannot reuse id '+unwrap(options.reverseId)+' for reverseId');    
-    options.reverseId = immutable(options.reverseId || getNewId(name+'-reverse'));
-    options.isForwardExit = immutable(true);
-    options.isReverseExit = immutable(false);
-    options.forwardExit = immutable(this);
-    //options.reverseExit = don't have Id yet
-    
+    options.destination = immutable(options.destination);
 
-/*    
-        
-    var reverse = new myProxy(original, {
+    var reverseDirection = unwrap(options.reverseDirection);
+    if (reverseDirection) {
+      options.reverseDirection = immutable(typeof reverseDirection === 'boolean' ? oppositeDirections[unwrap(options.direction)] :
+        options.reverseDirection);
 
-  get: function get(target, name) {
+      if (('reverseId' in options) && (unwrap(options.reverseid) in itemMap)) throw new Error('Cannot reuse id ' +
+        unwrap(options.reverseId) + ' for reverseId');
+      options.reverseId = immutable(options.reverseId || getNewId(name + '-reverse'));
 
-    var reverseName = reverseMap[name];
-    if (reverseName) return target[reverseName];
-    return target[name];
-  },
+      // these are not touchable
+      options.isForwardExit = immutable(true);
+      options.isReverseExit = immutable(false);
 
-  set: function set(target, name, value) {
-    var reverseName = reverseMap[name];
-    if (reverseName) {
-      target[reverseName] = value;
-    } else {
-      target[name] = value;
+      options.forwardExit = immutable(this);
+
+      var proxyType = function() {};
+      proxyType.prototype = this;
+      var reverseExit = new proxyType();
+
+      options.reverseExit = immutable(reverseExit);
     }
-    return true;
-  }
 
-});
-
-  */  
     Item.call(this, options);
+
+    if (reverseDirection) {
+
+      var reverseExit = this.reverseExit;
+      var forwardExit = this;
+
+      Object.keys(this).forEach(function(k) {
+        var rk = exitReverseProperties[k] || k;
+        var h = {
+          enumerable: true,
+          configurable: false,
+          get: function() {
+            return forwardExit[rk];
+          },
+          set: function(v) {
+            forwardExit[rk] = v;
+          }
+        };
+        Object.defineProperty(reverseExit, k, h);
+      });
+
+      reverseExit.serialize = function() {
+        return '';
+      };
+      reverseExit.deserialize = function() {};
+      Object.seal(reverseExit);
+
+      itemMap[this.reverseId] = reverseExit;
+    }
+
   }
-  
-  
+
   Exit.prototype = Object.create(Item.prototype);
   Exit.prototype.beUsedBy = function(subject) {
     var ret = 'You use ' + this.definiteName + ' leading ' + this.direction + '.\n\n';
     subject.location = this.destination;
     return ret + subject.look();
   };
-  A.newExit = function(options){return new Exit(options)};
+  A.newExit = function(options) {
+    return new Exit(options)
+  };
 
-  
   function interpretInput(subject, str) {
     str = str.toLowerCase().replace(/[^a-z0-9 ]/g, '');
     str = str.replace(/\s+/g, ' ').trim();
@@ -823,40 +845,3 @@ var myProxy = (typeof Proxy === 'function') ? Proxy :
   A.respond = respond;
 
 };
-
-
-'use strict';
-
-var original = { id: 'original', location: 'here', direction: 'east',
-  reverseDirection: 'west', destination: 'there', reverseId: 'reverse',
-  isForward: true, isReverse: false, open: true };
-original.hey = function(){return this.id + ' says hey!';};
-  
-var reverseMap = { id: 'reverseId', location: 'destination', direction: 'reverseDirection',
-  isForward: 'isReverse' };
-Object.keys(reverseMap).forEach(function (k) {
-  reverseMap[reverseMap[k]] = k;
-});
-
-/*
-var reverse = new myProxy(original, {
-
-  get: function get(target, name) {
-
-    var reverseName = reverseMap[name];
-    if (reverseName) return target[reverseName];
-    return target[name];
-  },
-
-  set: function set(target, name, value) {
-    var reverseName = reverseMap[name];
-    if (reverseName) {
-      target[reverseName] = value;
-    } else {
-      target[name] = value;
-    }
-    return true;
-  }
-
-});
-*/
