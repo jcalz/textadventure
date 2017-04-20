@@ -1,8 +1,6 @@
 "use strict";
 
 //TODO limit to inventory?
-//TODO make parsing items try to find exits or items by checking for direction words plus item name
-//   e.g., dir: north, item: door: "the northern door" or "north door", or "door to the north", or "door leading north", etc
 //TODO maybe ambiguous items should be a warning error rather than first-found...
 //TODO "jump"
 //TODO "put ___ in/on ____"
@@ -68,16 +66,18 @@ function Adventure() {
   }
 
   var directions = {
-    north: ['n'],
-    south: ['s'],
-    east: ['e'],
-    west: ['w'],
-    northeast: ['ne'],
-    southeast: ['se'],
-    northwest: ['nw'],
-    southwest: ['sw'],
-    up: ['u'],
-    down: ['d']
+    north: ['n', 'northern', 'northward', 'northwards'],
+    south: ['s', 'southern', 'southward', 'southwards'],
+    east: ['e', 'eastern', 'eastward', 'eastwards'],
+    west: ['w', 'western', 'westward', 'westwards'],
+    northeast: ['ne', 'northeastern', 'northeastward', 'northeastwards'],
+    southeast: ['se', 'southeastern', 'southeastward', 'southeastwards'],
+    northwest: ['nw', 'northwestern', 'northwestward', 'northwestwards'],
+    southwest: ['sw', 'southwestern', 'southwestward', 'southeastwards'],
+    up: ['u', 'upper', 'upward', 'upwards', 'above', 'high', 'higher', 'highest', 'over', 'top'],
+    down: ['d', 'lower', 'downward', 'downwards', 'below', 'lower', 'low', 'lowest', 'under', 'beneath', 'underneath',
+      'bottom'
+    ]
   };
   var dirs = {};
   Object.keys(directions).forEach(function(k) {
@@ -185,7 +185,7 @@ function Adventure() {
     }
 
     options.description = immutable(options.description || null);
-    options.keywords = immutable(options.keywords || [name]);
+    options.keywords = immutable(options.keywords || [name.toLowerCase().replace(/[^a-z0-9 ]/g, '')]);
     options.plural = immutable('plural' in options ? options.plural : false);
     options.definiteName = immutable(options.definiteName || ('the ' + name));
     options.indefiniteName = immutable(options.indefiniteName || (plural ? name : ('aeiou'.indexOf(name.charAt(0).toLowerCase()) >=
@@ -372,15 +372,6 @@ function Adventure() {
     return subject.has(this);
   };
 
-  Item.prototype.beExitedBy = function(subject, dir) {
-    var exit = this.getExits().find(function(ex) {
-      return ex.direction === dir;
-    });
-    if (!exit)
-      return "You can't go " + dir + " from here.";
-    return subject.use(exit);
-  };
-
   Item.prototype.superMethod = function(name) {
     return Item.prototype[name].bind(this);
   };
@@ -504,26 +495,24 @@ function Adventure() {
       this[subjectCommandName] = command;
     };
 
-    var go = function(dir) {
-      if (!this.location) {
-        return "You can't go " + dir + " from here.";
+    var go = function(exitOrDirection) {
+      if (typeof exitOrDirection === 'string') {
+        return "You can't go " + exitOrDirection + " from here.";
       }
-      return this.location.beExitedBy(this, dir);
+      return this.use(exitOrDirection);
     }
     go.templates = ['go ?d1', '?d1', 'move ?d1', 'walk ?d1'];
     go.help = 'Go in the specified direction, like North or South.';
     this.go = go;
-    var climb = function() {
-      return this.go('up');
-    };
-    climb.templates = ['climb', 'climb up'];
-    this.climb = climb;
 
-    var climbDown = function() {
-      return this.go('down');
+    var climb = function(dir) {
+      if (!dir) {
+        dir = 'up';
+      }
+      return this.go(dir);
     };
-    climbDown.templates = ['climb down'];
-    this.climbDown = climbDown;
+    climb.templates = ['climb', 'climb ?d1'];
+    this.climb = climb;
 
     var look = function look() {
       this.location.known = true;
@@ -737,15 +726,20 @@ function Adventure() {
           }
           var result;
           if (token.charAt(1) == 'i') {
-            // interpret as an item
-            result = parseItemAndRemainder(subject, m);
-            if (!result) continue templateLoop; // not an item
-            ret.parameters[paramIndex] = result.item;
+            // interpret as an item or exit?
+            result = parseExitAndRemainder(subject, m);
+            if (!result || typeof result.exit === 'string') {
+              result = parseItemAndRemainder(subject, m);
+              if (!result) continue templateLoop; // not an item
+              ret.parameters[paramIndex] = result.item;
+            } else {
+              ret.parameters[paramIndex] = result.exit;
+            }
           } else if (token.charAt(1) == 'd') {
-            // interpret as direction
-            result = parseDirectionAndRemainder(m);
-            if (!result) continue templateLoop; // not a direction
-            ret.parameters[paramIndex] = result.direction;
+            // interpret as exit
+            result = parseExitAndRemainder(subject, m);
+            if (!result) continue templateLoop; // not an exit
+            ret.parameters[paramIndex] = result.exit;
           } else {
             // don't recognize the type of pattern word
             console.log('bad pattern type in: ' + template.pattern.join(' '));
@@ -772,9 +766,9 @@ function Adventure() {
     return [].concat.apply([], arrayOfArray);
   }
 
-  function parseDirectionAndRemainder(str) {
+  function parseDirectionAndRemainder(subject, str) {
+    str = str.toLowerCase().replace(/^(on|to|toward) /i, '').trim(); // strip off directional words
     str = str.toLowerCase().replace(/^(the|a|an) /i, '').trim(); // strip off articles
-    // TODO strip off "to" or "toward"?
     var space = (str + ' ').indexOf(' ');
     if (!space) return null; // no words
     var word = str.substring(0, space);
@@ -788,16 +782,84 @@ function Adventure() {
     return null; // couldn't find direction
   }
 
-  function parseItemAndRemainder(subject, str) {
+  function parseExitAndRemainder(subject, str) {
+    var loc = subject.location;
+    var knownNearbyExits = allItems().filter(function(it) {
+      return (it.known) && (it instanceof Exit) && (it.location === loc);
+    });
+
+    var startsWithExit = parseItemAndRemainder(subject, str, knownNearbyExits);
+    if (startsWithExit) {
+      // see if the next word is a direction
+      var followedByDirection = parseDirectionAndRemainder(subject, startsWithExit.remainder);
+      if (followedByDirection) {
+        // okay, we found something.  Now let's see if that matches up with the exit in that direction
+        var theExit = knownNearbyExits.find(function(it) {
+          return it.direction === followedByDirection.direction
+        });
+        if (theExit) {
+          // there is an exit in this direction, but the user might have used the wrong name for it
+          startsWithThisExit = parseItemAndRemainder(subject, str, [theExit]);
+          if (startsWithThisExit) {
+            followedByDirection = parseDirectionAndRemainder(subject, startsWithExit.remainder);
+            if (followedByDirection && followedByDirection.direction === theExit.direction) {
+              // this works
+              return {
+                exit: theExit,
+                remainder: followedByDirection.remainder
+              };
+            }
+            // the exit is not in the direction specified... try other matches
+          } // the exit is not in the direciton specified... try other matches            
+        } // there is no exit in that direction.  Blah            
+      } // there is no direction afterward, but so just the exit was specified
+      return {
+        exit: startsWithExit.item,
+        remainder: startsWithExit.remainder
+      };
+    }
+
+    var startsWithDirection = parseDirectionAndRemainder(subject, str);
+    if (startsWithDirection) {
+      var theExit = knownNearbyExits.find(function(it) {
+        return it.direction === startsWithDirection.direction;
+      });
+      if (theExit) {
+        var followedByExit = parseItemAndRemainder(subject, startsWithDirection.remainder, [theExit]);
+        if (followedByExit) {
+          return {
+            exit: theExit,
+            remainder: followedByExit.remainder
+          };
+        }
+        // not followed by an exit word, but the direction will specify the exit
+        return {
+          exit: theExit,
+          remainder: startsWithDirection.remainder
+        };
+      }
+      // there is no exit in this direction, but we definitely specified a direction
+      // Let's return the direction with no exit?
+      return {
+        exit: startsWithDirection.direction,
+        remainder: startsWithDirection.remainder
+      };
+    }
+    return null; // no exit item, no direction, forget it           
+  }
+
+  function parseItemAndRemainder(subject, str, itemList) {
     str = str.toLowerCase().replace(/^(the|a|an) /i, ''); // strip off articles
-    // get keywords for all known items
-    var knownItems = flatten(allItems().filter(function(x) {
+    itemList = itemList || allItems().filter(function(x) {
       return x.known;
-    }).map(function(x) {
+    });
+    // get keywords for all acceptable items
+    var knownItems = flatten(itemList.map(function(x) {
+      var canSee = subject.canSee(x);
       return x.keywords.map(function(k) {
         return {
           keyword: k.toLowerCase(),
-          canSee: subject.canSee(x),
+          canSee: canSee,
           item: x
         };
       });

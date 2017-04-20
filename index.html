@@ -363,6 +363,8 @@
     // EXITS
 
     adventure.newExit({
+      name: 'door',
+      keywords: ['door', 'exit'],
       location: room,
       direction: 'north',
       destination: closet,
@@ -370,15 +372,19 @@
     });
 
     adventure.newExit({
+      name: 'door',
+      keywords: ['door', 'exit'],
       location: room,
       direction: 'south',
       destination: bedroom,
       reverseDirection: true
     });
 
-    var hiddenExit = adventure.newExit({
-      id: 'hiddenExit',
-      name: 'exit',
+    var holeInTheWall = adventure.newExit({
+      id: 'holeInTheWall',
+      name: 'hole',
+      keywords: ['hole', 'exit'],
+      description: 'It\'s just a large hole in the wall; no big deal.',
       location: closet,
       direction: 'east',
       destination: tunnel,
@@ -388,6 +394,8 @@
 
     adventure.newExit({
       location: tunnel,
+      name: 'ramp',
+      keywords: ['ramp', 'exit'],
       direction: 'east',
       destination: pit,
       reverseDirection: 'up'
@@ -652,12 +660,12 @@
       var ret = "";
       if (!boulder.budged) {
         boulder.budged = true;
-        hiddenExit.hidden = false;
+        holeInTheWall.hidden = false;
         return "You bend down and push the boulder as hard as you can.  At first, it won't budge. " +
           "Finally, it starts moving along the wall, little by little.  Eventually you push it into " +
           "the corner where it stays.  You can't move it any further, and now you're sweaty and tired. " +
           "Why did you do this again?\n\nAnnoyed with yourself, you step back from the boulder and stand " +
-          "up again... to see that the boulder had been blocking an exit on the eastern wall, which is now " +
+          "up again... to see that the boulder had been blocking a large hole in the eastern wall, which is now " +
           "revealed!"
       }
       return "The boulder is completely wedged in the corner now.  It's not going anywhere.";
