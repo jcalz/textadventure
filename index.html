@@ -240,7 +240,7 @@
       return date.toString();
     };
 
-    var gameVersion = '-v0';
+    var gameVersion = '-v0.1';
     var autosaveKey = 'autosave' + gameVersion;
 
     $(function() {
@@ -307,7 +307,7 @@
     you.name = 'you';
     you.keywords = ['me', 'myself', 'I'];
     you.known = true;
-    you.unlisted = true;
+    you.unlisted = adventure.immutable(true);
     you = adventure.newPerson(you);
 
     // silly template language: 
@@ -362,13 +362,40 @@
 
     // EXITS
 
+    var doorOpen = function(subject) {
+        if (this.open) return "It's already open.";
+        this.open = true;
+        return "You have opened "+this.definiteName+" leading "+this.direction+".";
+    };
+    
+    var doorClose = function(subject) {
+        if (!this.open) return "It's already closed.";
+        this.open = false;
+        return "You have closed "+this.definiteName+" leading "+this.direction+".";
+    };
+    
+    var doorUse = function(subject) {
+        if (!this.open) return adventure.capitalize(this.definiteName)+" leading "+this.direction+" is closed.";
+        return this.superMethod('beUsedBy')(subject);
+    };
+    
+    var doorExamine = function(subject) {
+        var description = this.superMethod('beExaminedBy')(subject);
+        return description + ' ' + adventure.capitalize(this.it)+ ' is ' + (this.open ? 'open' : 'closed') + '.';
+    };
+    
     adventure.newExit({
       name: 'door',
       keywords: ['door', 'exit'],
       location: room,
       direction: 'north',
       destination: closet,
-      reverseDirection: true
+      reverseDirection: true,
+      open: true,
+      beOpenedBy: doorOpen,
+      beClosedBy: doorClose,
+      beUsedBy: doorUse,
+      beExaminedBy: doorExamine
     });
 
     adventure.newExit({
@@ -377,7 +404,12 @@
       location: room,
       direction: 'south',
       destination: bedroom,
-      reverseDirection: true
+      reverseDirection: true,
+      open: true,
+      beOpenedBy: doorOpen,
+      beClosedBy: doorClose,
+      beUsedBy: doorUse,
+      beExaminedBy: doorExamine
     });
 
     var holeInTheWall = adventure.newExit({

@@ -195,8 +195,9 @@ function Adventure() {
     options.it = immutable(options.it || (plural ? 'they' : 'it'));
     options.canBeTaken = immutable('canBeTaken' in options ? options.canBeTaken : true);
     options.location = mutable(options.location || null);
+    options.hidden = 'hidden' in options ? mutable(options.hidden) : immutable(false);
+    options.unlisted = 'unlisted' in options ? mutable(options.unlisted) : immutable(false);
     options.known = mutable('known' in options ? options.known : false);
-    options.hidden = mutable('hidden' in options ? options.hidden : false);
 
     Object.keys(options).forEach(function(prop) {
       var v = options[prop];
@@ -373,7 +374,7 @@ function Adventure() {
   };
 
   Item.prototype.superMethod = function(name) {
-    return Item.prototype[name].bind(this);
+    return (Object.getPrototypeOf(this))[name].bind(this);
   };
 
   // copy the state of this item into a string
@@ -420,11 +421,11 @@ function Adventure() {
   Item.prototype.newBackgroundItem = function(options) {
     options = options || {};
     if (!('unlisted' in options))
-      options.unlisted = true;
+      options.unlisted = immutable(true);
     if (!('canBeTaken' in options))
-      options.canBeTaken = false;
+      options.canBeTaken = immutable(false);
     if (!('location' in options))
-      options.location = this;
+      options.location = immutable(this);
     return new Item(options);
   };
 
@@ -444,6 +445,7 @@ function Adventure() {
     if (!('canBeTaken' in options)) {
       options.canBeTaken = immutable(false);
     }
+    options.location = immutable(options.location);
     Item.call(this, options);
   }
   Place.prototype = Object.create(Item.prototype);
@@ -678,13 +680,20 @@ function Adventure() {
     }
 
   }
-
   Exit.prototype = Object.create(Item.prototype);
+  Exit.prototype.superMethod = function(name) {
+    return Exit.prototype[name].bind(this);
+  };
   Exit.prototype.beUsedBy = function(subject) {
     var ret = 'You use ' + this.definiteName + ' leading ' + this.direction + '.\n\n';
     subject.location = this.destination;
     return ret + subject.look();
   };
+  Exit.prototype.beExaminedBy = function(subject) {
+    if (this.description) return this.description;
+    return capitalize(this.it) + (this.plural ? "'re" : "'s") + ' ' + this.indefiniteName + (this.direction ? ' leading '+this.direction : '') + '.';
+  };
+  
   A.newExit = function(options) {
     return new Exit(options)
   };
@@ -767,6 +776,7 @@ function Adventure() {
   }
 
   function parseDirectionAndRemainder(subject, str) {
+    str = str.toLowerCase().replace(/^(leading) /i, '').trim(); // strip off 'leading'  
     str = str.toLowerCase().replace(/^(on|to|toward) /i, '').trim(); // strip off directional words
     str = str.toLowerCase().replace(/^(the|a|an) /i, '').trim(); // strip off articles
     var space = (str + ' ').indexOf(' ');
@@ -799,8 +809,8 @@ function Adventure() {
         });
         if (theExit) {
           // there is an exit in this direction, but the user might have used the wrong name for it
-          startsWithThisExit = parseItemAndRemainder(subject, str, [theExit]);
-          if (startsWithThisExit) {
+          startsWithExit = parseItemAndRemainder(subject, str, [theExit]);
+          if (startsWithExit) {
             followedByDirection = parseDirectionAndRemainder(subject, startsWithExit.remainder);
             if (followedByDirection && followedByDirection.direction === theExit.direction) {
               // this works
