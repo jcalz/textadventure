@@ -374,7 +374,15 @@ function Adventure() {
   };
 
   Item.prototype.superMethod = function(name) {
-    return (Object.getPrototypeOf(this))[name].bind(this);
+    var method = this[name];
+    var proto = Object.getPrototypeOf(this);
+    while (true) {
+      var superMethod = proto[name];
+      if (!superMethod) return superMethod;
+      if (superMethod !== method) return superMethod.bind(this);
+      proto = Object.getPrototypeOf(proto);
+      if (!proto) return void(0);
+    }
   };
 
   // copy the state of this item into a string
@@ -598,18 +606,6 @@ function Adventure() {
     exitReverseProperties[exitReverseProperties[k]] = k;
   });
 
-  var exitReverseHandler = {
-
-    get: function get(target, name) {
-
-    },
-
-    set: function set(target, name, value) {
-      target[exitReverseProperties[name] || name] = value;
-      return true;
-    }
-  };
-
   function Exit(options) {
     if (typeof options === 'string') {
       options = {
@@ -681,9 +677,6 @@ function Adventure() {
 
   }
   Exit.prototype = Object.create(Item.prototype);
-  Exit.prototype.superMethod = function(name) {
-    return Exit.prototype[name].bind(this);
-  };
   Exit.prototype.beUsedBy = function(subject) {
     var ret = 'You use ' + this.definiteName + ' leading ' + this.direction + '.\n\n';
     subject.location = this.destination;
@@ -691,9 +684,10 @@ function Adventure() {
   };
   Exit.prototype.beExaminedBy = function(subject) {
     if (this.description) return this.description;
-    return capitalize(this.it) + (this.plural ? "'re" : "'s") + ' ' + this.indefiniteName + (this.direction ? ' leading '+this.direction : '') + '.';
+    return capitalize(this.it) + (this.plural ? "'re" : "'s") + ' ' + this.indefiniteName + (this.direction ?
+      ' leading ' + this.direction : '') + '.';
   };
-  
+
   A.newExit = function(options) {
     return new Exit(options)
   };

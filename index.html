@@ -362,55 +362,46 @@
 
     // EXITS
 
-    var doorOpen = function(subject) {
+    var openableExitOptions = {
+      open: true,
+      beOpenedBy: function(subject) {
         if (this.open) return "It's already open.";
         this.open = true;
-        return "You have opened "+this.definiteName+" leading "+this.direction+".";
-    };
-    
-    var doorClose = function(subject) {
+        return "You have opened " + this.definiteName + " leading " + this.direction + ".";
+      },
+      beClosedBy: function(subject) {
         if (!this.open) return "It's already closed.";
         this.open = false;
-        return "You have closed "+this.definiteName+" leading "+this.direction+".";
-    };
-    
-    var doorUse = function(subject) {
-        if (!this.open) return adventure.capitalize(this.definiteName)+" leading "+this.direction+" is closed.";
+        return "You have closed " + this.definiteName + " leading " + this.direction + ".";
+      },
+      beUsedBy: function(subject) {
+        if (!this.open) return adventure.capitalize(this.definiteName) + " leading " + this.direction +
+          " is closed.";
         return this.superMethod('beUsedBy')(subject);
-    };
-    
-    var doorExamine = function(subject) {
+      },
+      beExaminedBy: function(subject) {
         var description = this.superMethod('beExaminedBy')(subject);
-        return description + ' ' + adventure.capitalize(this.it)+ ' is ' + (this.open ? 'open' : 'closed') + '.';
+        return description + ' ' + adventure.capitalize(this.it) + ' is ' + (this.open ? 'open' : 'closed') + '.';
+      }
     };
-    
-    adventure.newExit({
+
+    adventure.newExit(Object.assign({}, openableExitOptions, {
       name: 'door',
       keywords: ['door', 'exit'],
       location: room,
       direction: 'north',
       destination: closet,
-      reverseDirection: true,
-      open: true,
-      beOpenedBy: doorOpen,
-      beClosedBy: doorClose,
-      beUsedBy: doorUse,
-      beExaminedBy: doorExamine
-    });
+      reverseDirection: true
+    }));
 
-    adventure.newExit({
+    adventure.newExit(Object.assign({}, openableExitOptions, {
       name: 'door',
       keywords: ['door', 'exit'],
       location: room,
       direction: 'south',
       destination: bedroom,
-      reverseDirection: true,
-      open: true,
-      beOpenedBy: doorOpen,
-      beClosedBy: doorClose,
-      beUsedBy: doorUse,
-      beExaminedBy: doorExamine
-    });
+      reverseDirection: true
+    }));
 
     var holeInTheWall = adventure.newExit({
       id: 'holeInTheWall',
@@ -693,6 +684,7 @@
       if (!boulder.budged) {
         boulder.budged = true;
         holeInTheWall.hidden = false;
+        holeInTheWall.known = true;
         return "You bend down and push the boulder as hard as you can.  At first, it won't budge. " +
           "Finally, it starts moving along the wall, little by little.  Eventually you push it into " +
           "the corner where it stays.  You can't move it any further, and now you're sweaty and tired. " +
