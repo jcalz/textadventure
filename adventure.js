@@ -691,8 +691,38 @@ function Adventure() {
   A.newExit = function(options) {
     return new Exit(options)
   };
-
-  function interpretInput(subject, str) {
+  
+  //TODO desperation isn't good, maybe this is the right way to match all the time
+  // It could be useful to collect lots of possible results and either return the
+  // first success or the most likely failure
+  function findConfusingInput (subject, str) {
+    str = str.toLowerCase().replace(/[^a-z0-9 ]/g, '');
+    str = str.replace(/\s+/g, ' ').trim();
+    str = str.replace(/\bplease( |$)/g, '').trim(); // no need to be polite 
+    var knownItems = allItems().filter(function(it){return it.known;});
+    for (var i = 0; i < interpretInput.templates.length; i++) {
+       var template = interpretInput.templates[i];
+       if (!template.numTokens) continue; // don't bother with match-all I guess
+       var matchResults = template.regexp.exec(str);
+       if (!matchResults) continue;
+       var parameters = [];
+       var success = true;
+       for (var j = 1; j < matchResults.length; j++) {
+          var p = template.paramOrder[j-1]-1;
+          var item = parseItemAndRemainder(subject, matchResults[j], knownItems);
+          if (!item || item.remainder) {
+            parameters[p]=matchResults[j];
+            success = false;
+          } else {
+            parameters[p]=item.item;
+          }
+       }
+       if (!success) return {func: template.func, parameters: parameters, template: template};
+    }
+    return null; // totally confused
+  }
+ 
+  var interpretInput = this.interpretInput = function interpretInput(subject, str) {
     str = str.toLowerCase().replace(/[^a-z0-9 ]/g, '');
     str = str.replace(/\s+/g, ' ').trim();
     str = str.replace(/\bplease( |$)/g, '').trim(); // no need to be polite 
@@ -700,9 +730,13 @@ function Adventure() {
     if (!interpretInput.templates) {
       interpretInput.templates = flatten(subject.commands().map(function(c) {
         return c.templates.map(function(t) {
+          var pattern = t.toLowerCase().split(/\s+/);
           return {
             func: c,
-            pattern: t.toLowerCase().split(/\s+/)
+            pattern: pattern,
+            regexp: new RegExp('^'+(pattern.map(function(s){return s.charAt(0)=='?' ? '(.*)' : s.replace(/[^a-z0-9 ]/g,'');}).join(' '))+'$'),
+            paramOrder: pattern.filter(function(s){return s.charAt(0)=='?';}).map(function(s){return parseInt(s.substring(2),10);}),
+            numTokens: pattern.filter(function(s){return s.charAt(0)!='?';}).length
           };
         });
       }));
@@ -715,6 +749,7 @@ function Adventure() {
       var template = interpretInput.templates[i];
       var m = str;
       var ret = {
+        success: true,
         func: template.func,
         parameters: [],
         template: template.pattern.join(' ')
@@ -732,8 +767,13 @@ function Adventure() {
             // interpret as an item or exit?
             result = parseExitAndRemainder(subject, m);
             if (!result || typeof result.exit === 'string') {
-              result = parseItemAndRemainder(subject, m);
-              if (!result) continue templateLoop; // not an item
+              var knownItems = allItems().filter(function(it){return it.known;});
+              result = parseItemAndRemainder(subject, m, knownItems.filter(function(it){return subject.canSee(it);}));
+              if (!result) {
+                result = parseItemAndRemainder(subject, m, knownItems.filter(function(it){return !subject.canSee(it);}));
+                if (!result) 
+                    continue templateLoop; // not an item
+              }
               ret.parameters[paramIndex] = result.item;
             } else {
               ret.parameters[paramIndex] = result.exit;
@@ -762,7 +802,7 @@ function Adventure() {
         return ret;
       }
     }
-    return null; // no match
+    return {success: false }; // no match
   }
 
   function flatten(arrayOfArray) {
@@ -780,7 +820,7 @@ function Adventure() {
     if (word in dirs) {
       return {
         direction: dirs[word],
-        remainder: str.substring(space + 1)
+        remainder: remainder
       };
     }
     return null; // couldn't find direction
@@ -854,11 +894,12 @@ function Adventure() {
 
   function parseItemAndRemainder(subject, str, itemList) {
     str = str.toLowerCase().replace(/^(the|a|an) /i, ''); // strip off articles
+        
     itemList = itemList || allItems().filter(function(x) {
       return x.known;
     });
     // get keywords for all acceptable items
-    var knownItems = flatten(itemList.map(function(x) {
+    var theItems = flatten(itemList.map(function(x) {
       var canSee = subject.canSee(x);
       return x.keywords.map(function(k) {
         return {
@@ -871,13 +912,10 @@ function Adventure() {
 
     // sort these items so that nearby items are more likely to be identified,
     // and do the longest match first
-    knownItems.sort(function(x, y) {
-      if (x.canSee != y.canSee) {
-        return x.canSee ? -1 : 1;
-      }
+    theItems.sort(function(x, y) {
       return y.keyword.length - x.keyword.length;
     });
-    var found = knownItems.find(function(x) {
+    var found = theItems.find(function(x) {
       return str.startsWith(x.keyword);
     });
     if (!found) return null;
@@ -898,9 +936,17 @@ function Adventure() {
     str = str.replace(/^"\s*(.*)\s*"$/, '$1');
     str = str.replace(/^'\s*(.*)\s*'$/, '$1');
     var interpretation = interpretInput(subject, str);
-    if (interpretation) {
+    if (interpretation.success) {
       return interpretation.func.apply(subject, interpretation.parameters);
-    }
+    } 
+    // failed to understand
+    var failedInterpretation = findConfusingInput(subject, str);
+    if (failedInterpretation) {
+        var misunderstood = failedInterpretation.parameters.filter(function(s){return typeof s === 'string';}).map(function(s){return '"'+s+'"';});
+        if (misunderstood) {
+            return "Sorry, I don't understand "+series(misunderstood,'or')+".";  
+        }
+     }
     // okay, we didn't understand.  So let's be humorous?
     if (str.length == 0) {
       if (!curBlankResponses.length) curBlankResponses = blankResponses.slice();
