@@ -121,7 +121,8 @@ function Adventure() {
   var serialize = function() {
     var serializedMap = {};
     Object.keys(itemMap).forEach(function(k) {
-      serializedMap[k] = itemMap[k].serialize();
+      var serialized = itemMap[k].serialize();
+      if (serialized) serializedMap[k] = serialized;
     });
     return JSON.stringify(serializedMap);
   };
@@ -388,10 +389,10 @@ function Adventure() {
   // copy the state of this item into a string
   var serializationPrefix = 'ITEM!';
 
-  // return a string representing the current state of this item
+  // return a string representing the current state of this item, or falsy value if no state to serialize
   Item.prototype.serialize = function() {
     var item = this;
-    return JSON.stringify(this, function(k, v) {
+    var ret = JSON.stringify(this, function(k, v) {
       if ((this === item) && (k in this.getImmutableProperties())) return; // don't serialize immutables
       if (v === A) return; // don't serialize the adventure object
       if (k && v && (v.adventure === A)) { // serialize another Item/Place/Person as its id string  
@@ -402,6 +403,8 @@ function Adventure() {
       }
       return v;
     });
+    if (ret !== '{}') return ret;
+    return false;
   };
 
   // restore this item to the state represented by the passed-in string  
@@ -505,11 +508,11 @@ function Adventure() {
       this[subjectCommandName] = command;
     };
 
-    var go = function(exitOrDirection) {
-      if (typeof exitOrDirection === 'string') {
-        return "You can't go " + exitOrDirection + " from here.";
+    var go = function(exit) {
+      if (exit.noExit) {
+        return "You can't go " + exit.direction + " from here.";
       }
-      return this.use(exitOrDirection);
+      return this.use(exit);
     }
     go.templates = ['go ?d1', '?d1', 'move ?d1', 'walk ?d1'];
     go.help = 'Go in the specified direction, like North or South.';
@@ -677,6 +680,18 @@ function Adventure() {
 
   }
   Exit.prototype = Object.create(Item.prototype);
+  Exit.prototype.getDistinguishingName = function(indefinite) {
+    var ret = indefinite ? this.indefiniteName : this.definiteName;
+    if (!this.location) return ret;
+    if (!this.direction) return ret;
+    var name = this.name;
+    var exitsOfSameType = this.location.getExits().filter(function(ex) {
+      return ex.name === name;
+    });
+    if (exitsOfSameType.length < 2) return ret;
+    ret += ' leading ' + this.direction;
+    return ret;
+  };
   Exit.prototype.beUsedBy = function(subject) {
     var ret = 'You use ' + this.definiteName + ' leading ' + this.direction + '.\n\n';
     subject.location = this.destination;
@@ -684,44 +699,27 @@ function Adventure() {
   };
   Exit.prototype.beExaminedBy = function(subject) {
     if (this.description) return this.description;
-    return capitalize(this.it) + (this.plural ? "'re" : "'s") + ' ' + this.indefiniteName + (this.direction ?
-      ' leading ' + this.direction : '') + '.';
+    return capitalize(this.it) + (this.plural ? "'re" : "'s") + ' ' + this.getDistinguishingName(true) + '.';
   };
 
   A.newExit = function(options) {
-    return new Exit(options)
+    return new Exit(options);
   };
-  
-  //TODO desperation isn't good, maybe this is the right way to match all the time
-  // It could be useful to collect lots of possible results and either return the
-  // first success or the most likely failure
-  function findConfusingInput (subject, str) {
-    str = str.toLowerCase().replace(/[^a-z0-9 ]/g, '');
-    str = str.replace(/\s+/g, ' ').trim();
-    str = str.replace(/\bplease( |$)/g, '').trim(); // no need to be polite 
-    var knownItems = allItems().filter(function(it){return it.known;});
-    for (var i = 0; i < interpretInput.templates.length; i++) {
-       var template = interpretInput.templates[i];
-       if (!template.numTokens) continue; // don't bother with match-all I guess
-       var matchResults = template.regexp.exec(str);
-       if (!matchResults) continue;
-       var parameters = [];
-       var success = true;
-       for (var j = 1; j < matchResults.length; j++) {
-          var p = template.paramOrder[j-1]-1;
-          var item = parseItemAndRemainder(subject, matchResults[j], knownItems);
-          if (!item || item.remainder) {
-            parameters[p]=matchResults[j];
-            success = false;
-          } else {
-            parameters[p]=item.item;
-          }
-       }
-       if (!success) return {func: template.func, parameters: parameters, template: template};
-    }
-    return null; // totally confused
-  }
- 
+
+  var noExit = {};
+  Object.keys(directions).forEach(function(k) {
+    noExit[k] = new Exit({
+      id: 'no-exit-' + k,
+      name: 'exit leading ' + k,
+      definiteName: 'an exit leading ' + k,
+      direction: k,
+      location: null,
+      destination: null,
+      noExit: immutable(true),
+      known: immutable(false)
+    });
+  });
+
   var interpretInput = this.interpretInput = function interpretInput(subject, str) {
     str = str.toLowerCase().replace(/[^a-z0-9 ]/g, '');
     str = str.replace(/\s+/g, ' ').trim();
@@ -733,10 +731,10 @@ function Adventure() {
           var pattern = t.toLowerCase().split(/\s+/);
           return {
             func: c,
-            pattern: pattern,
-            regexp: new RegExp('^'+(pattern.map(function(s){return s.charAt(0)=='?' ? '(.*)' : s.replace(/[^a-z0-9 ]/g,'');}).join(' '))+'$'),
-            paramOrder: pattern.filter(function(s){return s.charAt(0)=='?';}).map(function(s){return parseInt(s.substring(2),10);}),
-            numTokens: pattern.filter(function(s){return s.charAt(0)!='?';}).length
+            pattern: pattern //,
+            //        regexp: new RegExp('^'+(pattern.map(function(s){return s.charAt(0)=='?' ? '(.*)' : s.replace(/[^a-z0-9 ]/g,'');}).join(' '))+'$'),
+            //        paramOrder: pattern.filter(function(s){return s.charAt(0)=='?';}).map(function(s){return parseInt(s.substring(2),10);}),
+            //        numTokens: pattern.filter(function(s){return s.charAt(0)!='?';}).length
           };
         });
       }));
@@ -745,6 +743,8 @@ function Adventure() {
       });
       //TODO maybe they should be ordered by number of item/dirs, or length of words?
     }
+
+    var confusingInput = null;
     templateLoop: for (var i = 0; i < interpretInput.templates.length; i++) {
       var template = interpretInput.templates[i];
       var m = str;
@@ -766,13 +766,26 @@ function Adventure() {
           if (token.charAt(1) == 'i') {
             // interpret as an item or exit?
             result = parseExitAndRemainder(subject, m);
-            if (!result || typeof result.exit === 'string') {
-              var knownItems = allItems().filter(function(it){return it.known;});
-              result = parseItemAndRemainder(subject, m, knownItems.filter(function(it){return subject.canSee(it);}));
+            if ((!result) || (result.noExit)) {
+              var knownItems = allItems().filter(function(it) {
+                return it.known;
+              });
+              result = parseItemAndRemainder(subject, m, knownItems.filter(function(it) {
+                return subject.canSee(it);
+              }));
               if (!result) {
-                result = parseItemAndRemainder(subject, m, knownItems.filter(function(it){return !subject.canSee(it);}));
-                if (!result) 
-                    continue templateLoop; // not an item
+                result = parseItemAndRemainder(subject, m, knownItems.filter(function(it) {
+                  return !subject.canSee(it);
+                }));
+                if (!result) {
+                  if (!confusingInput) {
+                    confusingInput = {
+                      type: 'an item',
+                      input: m
+                    };
+                  }
+                  continue templateLoop; // not an item
+                }
               }
               ret.parameters[paramIndex] = result.item;
             } else {
@@ -781,7 +794,15 @@ function Adventure() {
           } else if (token.charAt(1) == 'd') {
             // interpret as exit
             result = parseExitAndRemainder(subject, m);
-            if (!result) continue templateLoop; // not an exit
+            if (!result) {
+              if (!confusingInput) {
+                confusingInput = {
+                  type: 'an exit',
+                  input: m
+                };
+              }
+              continue templateLoop; // not an exit
+            }
             ret.parameters[paramIndex] = result.exit;
           } else {
             // don't recognize the type of pattern word
@@ -802,7 +823,12 @@ function Adventure() {
         return ret;
       }
     }
-    return {success: false }; // no match
+    // no match
+    return {
+      success: false,
+      confusingInputType: (confusingInput ? confusingInput.type : 'a command'),
+      confusingInput: (confusingInput ? confusingInput.input : str)
+    };
   }
 
   function flatten(arrayOfArray) {
@@ -885,7 +911,7 @@ function Adventure() {
       // there is no exit in this direction, but we definitely specified a direction
       // Let's return the direction with no exit?
       return {
-        exit: startsWithDirection.direction,
+        exit: noExit[startsWithDirection.direction],
         remainder: startsWithDirection.remainder
       };
     }
@@ -894,7 +920,7 @@ function Adventure() {
 
   function parseItemAndRemainder(subject, str, itemList) {
     str = str.toLowerCase().replace(/^(the|a|an) /i, ''); // strip off articles
-        
+
     itemList = itemList || allItems().filter(function(x) {
       return x.known;
     });
@@ -938,21 +964,15 @@ function Adventure() {
     var interpretation = interpretInput(subject, str);
     if (interpretation.success) {
       return interpretation.func.apply(subject, interpretation.parameters);
-    } 
-    // failed to understand
-    var failedInterpretation = findConfusingInput(subject, str);
-    if (failedInterpretation) {
-        var misunderstood = failedInterpretation.parameters.filter(function(s){return typeof s === 'string';}).map(function(s){return '"'+s+'"';});
-        if (misunderstood) {
-            return "Sorry, I don't understand "+series(misunderstood,'or')+".";  
-        }
-     }
+    }
     // okay, we didn't understand.  So let's be humorous?
     if (str.length == 0) {
       if (!curBlankResponses.length) curBlankResponses = blankResponses.slice();
       return curBlankResponses.splice(Math.floor(Math.random() * curBlankResponses.length), 1)[0];
     }
-    return "Sorry, I don't understand \"" + str + "\". Type \"help\" for help.";
+
+    return "Sorry, I don't understand \"" + interpretation.confusingInput + "\".  Type \"help\" for help."
+
   }
   A.respond = respond;
 

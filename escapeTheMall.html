@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=ascii">
+  <title>Text Adventure: Escape the Mall</title>
+  <link href="https://fonts.googleapis.com/css?family=VT323" rel="stylesheet">
+  <script src="https://code.jquery.com/jquery-3.1.1.js" integrity="sha256-16cdPddA6VdVInumRGo6IbivbERE8p7CQR3HzTBuELA=" crossorigin="anonymous"></script>
+  <script src="./adventure.js"></script>
+  <style>
+    * {
+      font-family: 'VT323', monospace;
+      font-variant-ligatures: none;
+      box-sizing: border-box;
+      margin: 0;
+    }
+
+    html,
+    body {
+      height: 100%;
+    }
+
+    body {
+      display: flex;
+      flex-flow: column nowrap;
+      align-items: stretch;
+      overflow: hidden;
+    }
+
+    .header {
+      text-align: center;
+    }
+
+    .adventure-window {
+      flex: 1;
+      border: 5px solid #0f0;
+      padding: 5px;
+      color: #0f0;
+      background-color: black;
+      font-size: 1.5em;
+      display: flex;
+      flex-flow: column-reverse nowrap;
+      overflow: hidden;
+    }
+
+    .output {
+      white-space: pre-wrap;
+      overflow-wrap: break-word;
+      overflow: auto;
+    }
+
+    .output-text {
+      color: #ff0;
+    }
+
+    .error-text {
+      color: #f00;
+    }
+
+    .alert-text {
+      color: #f70;
+    }
+
+    .input-line {
+      display: flex;
+      flex-flow: row nowrap;
+      flex: 0 0 auto;
+    }
+
+    #input {
+      flex: 1;
+      border: none;
+      outline: none;
+      color: #0f0;
+      background-color: black;
+      font-size: 1em;
+    }
+
+    .filler {
+      height: 100vh;
+      display: inline-block;
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="header">
+    <h1>Text Adventure: Escape the Mall</h1>
+  </div>
+  <div class="adventure-window">
+    <form autocomplete="off" class="input-line" id="adventure-form" onsubmit="return false;">
+      <label class="prompt" for="input">&gt;&gt;&nbsp;</label>
+      <input type="text" id="input">
+    </form>
+    <div class="output" id="output">
+      <span class="filler output-text"></span>
+    </div>
+  </div>
+
+  <script>
+    "use strict";
+
+    function storageAvailable(type) {
+      try {
+        var storage = window[type],
+          x = '__storage_test__';
+        storage.setItem(x, x);
+        storage.removeItem(x);
+        return true;
+      } catch (e) {
+        return false;
+      }
+    }
+    var hasLocalStorage = storageAvailable('localStorage');
+
+    // USER INTERFACE
+    function moveCaretToEnd(el) {
+      if (typeof el.selectionStart == "number") {
+        el.selectionStart = el.selectionEnd = el.value.length;
+      } else if (typeof el.createTextRange != "undefined") {
+        el.focus();
+        var range = el.createTextRange();
+        range.collapse(false);
+        range.select();
+      }
+    }
+
+    // NEVER ALLOW THE FOCUS TO LEAVE THE INPUT BOX!  (seems evil)
+    $('#input').blur(function() {
+      window.setTimeout(function() {
+        $('#input').focus();
+      }, 0);
+    });
+    // IMPLEMENT COMMAND HISTORY WITH UP AND DOWN ARROWS		
+    var commandHistory = function() {
+      var history = [];
+      var localHistory = [''];
+      var index = 0;
+      var add = function add(command) {
+        // don't add duplicates, don't add blanks		
+        if (command.length && (!history.length || history[history.length - 1] !== command)) {
+          history.push(command);
+        }
+        index = history.length;
+        localHistory = history.slice();
+        localHistory.push('');
+      };
+      var arrow = function arrow(up, command) {
+        localHistory[index] = command;
+        if (up) {
+          index = Math.max(index - 1, 0);
+        } else {
+          index = Math.min(index + 1, history.length);
+        }
+        return localHistory[index];
+      };
+      return {
+        add: add,
+        arrow: arrow
+      };
+    }();
+    var KEYCODE_UP = 38;
+    var KEYCODE_DOWN = 40;
+    $('#input').keydown(function(e) {
+      if (e.which == KEYCODE_UP || e.which == KEYCODE_DOWN) {
+        var inputText = $('#input').val();
+        var selectedCommand = commandHistory.arrow(e.which == KEYCODE_UP, inputText);
+        $('#input').val(selectedCommand);
+        moveCaretToEnd($('#input').get(0));
+        e.preventDefault();
+      }
+    });
+
+    function output(str, classNames) {
+      classNames = classNames || 'output-text';
+      $('#output').queue(function(next) {
+        //console.log(str);
+        var outputSpan = $('<span>').addClass(classNames);
+        outputSpan.text(str + '\n');
+        var o = $('#output');
+        o.scrollTop(o.get(0).scrollHeight);
+        var startTop = o.scrollTop();
+        o.append(outputSpan);
+        var millisPerWindow = 500;
+        var pixelsPerMilli = $(window).height() / millisPerWindow;
+        var start = null;
+        var step = function step(time) {
+          if (!start) start = time;
+          var top = startTop + pixelsPerMilli * (time - start);
+          o.scrollTop(top);
+          if (Math.abs(o.scrollTop() - top) < 1) {
+            window.requestAnimationFrame(step);
+          } else {
+            next();
+          }
+        };
+        window.requestAnimationFrame(step);
+      });
+    }
+
+    function processInput(ioFunction) {
+      try {
+        var inputText = $('#input').val();
+        commandHistory.add(inputText);
+        $('#input').val('');
+        output('>>\xA0' + inputText, 'input-text');
+        var outputText = ioFunction(inputText);
+        output(outputText + '\n');
+      } catch (e) {
+        output('ERROR: ' + JSON.stringify(e, Object.getOwnPropertyNames(e)) + '\n', 'error-text');
+        if ("console" in window) console.log(e);
+      }
+    }
+
+    function durationString(millis) {
+      if (millis < 0) return null;
+      var units = ['millisecond', 'second', 'minute', 'hour', 'day', 'week'];
+      var divisors = [1000, 60, 60, 24, 7, 3];
+      var t = millis;
+      for (var i = 0; i < units.length; i++) {
+        if (t < divisors[i]) {
+          t = Math.floor(t);
+          return t + ' ' + units[i] + (t == 1 ? '' : 's');
+        }
+        t = t / divisors[i];
+      }
+      return null;
+    };
+
+    function dateString(millis) {
+      var date = new Date(millis);
+      if (Intl && Intl.DateTimeFormat) {
+        return (new Intl.DateTimeFormat('en-US', {
+          month: 'long',
+          day: 'numeric',
+          year: 'numeric'
+        })).format(date);
+      }
+      return date.toString();
+    };
+
+    var gameVersion = '-theMall-v0.0.1';
+    var autosaveKey = 'autosave' + gameVersion;
+
+    $(function() {
+
+      var processInputNormally = function() {
+        $('#adventure-form').off('submit').submit(function() {
+          processInput(function(inputText) {
+            return you.adventure.respond(you, inputText);
+          });
+          if (hasLocalStorage) {
+            localStorage.setItem(autosaveKey, adventure.serialize());
+            localStorage.setItem(autosaveKey + '-time', Date.now());
+          }
+          return false;
+        });
+
+      }
+
+      if (previouslySavedState) {
+        output(
+          '\n--------------------------------------PREVIOUS GAME AVAILABLE!--------------------------------------',
+          'alert-text');
+        var timestamp = parseInt(localStorage.getItem(autosaveKey + '-time'), 10);
+        var ds = durationString(Date.now() - timestamp);
+        var when = (timestamp) ? ((ds) ? (ds + ' ago') : ('on ' + dateString(timestamp))) : '';
+        output('It looks like you left a game in progress ' + when + '.\n');
+        output('Would you like to continue that game?');
+        output('If you type "YES", you will continue the previous game where you left off.');
+        output('If you type "NO", you will start a new game, and the previous game will be erased.');
+        output('\nPlease type "YES" or "NO".\n');
+        $('#adventure-form').submit(function() {
+          processInput(function(inputText) {
+            var i = inputText.replace(/[\s"']/g, '').toLowerCase();
+            if ((i !== 'yes') && (i !== 'no'))
+              return 'Please type \"YES\" or \"NO\".';
+            var ret;
+            if (i === 'yes') {
+              adventure.deserialize(previouslySavedState);
+              ret = '\n' + 'Okay, continuing the previous game...\n\n' + you.look();
+            } else {
+              ret = '\nOkay, starting a new game...\n\n' + you.start();
+              localStorage.removeItem(autosaveKey);
+            }
+            processInputNormally();
+            return ret;
+          });
+          return false;
+        });
+
+      } else {
+        output('\n' + you.start());
+        processInputNormally();
+      }
+
+      $('#input').focus();
+
+    });
+
+    ///////////// SPECIFIC STUFF /////////////////
+    var adventure = new Adventure();
+
+    var you = adventure.newPerson({
+      id: 'you',
+      name: 'you',
+      keywords: ['me', 'myself', 'i'],
+      known: true,
+      unlisted: adventure.immutable(true)
+    });
+
+    // silly template language: 
+    // "use ?i1" means "use" followed by an ITEM, to be passed as FIRST parameter to the function.
+    // "give ?i1 to ?i2", means "give"
+    // "go ?d1" // d means DIRECTION
+    you.addCommand('read', 'beReadBy', ['read ?i1'], 'Read something.');
+    you.addCommand('eat', 'beEatenBy', ['eat ?i1']);
+    you.addCommand('open', 'beOpenedBy', ['open ?i1', 'open ?i1 with ?i2', 'use ?i2 to open ?i1', 'open ?i1 using ?i2']);
+    you.addCommand('close', 'beClosedBy', ['close ?i1', 'shut ?i1']);
+    you.addCommand('unlock', 'beUnlockedBy', ['unlock ?i1', 'unlock ?i1 with ?i2', 'use ?i2 to unlock ?i1',
+      'unlock ?i1 using ?i2'
+    ]);
+    you.addCommand('lock', 'beLockedBy', ['lock ?i1', 'lock ?i1 with ?i2', 'use ?i2 to lock ?i1', 'lock ?i1 using ?i2']);
+    you.addCommand('move', 'beMovedBy', ['move ?i1']);
+    you.addCommand('push', 'bePushedBy', ['push ?i1', 'shove ?i1', 'press ?i1', 'push on ?i1', 'press on ?i1']);
+    you.addCommand('pull', 'bePulledBy', ['pull ?i1', 'tug ?i1', 'yank ?i1', 'pull on ?i1', 'tug on ?i1', 'yank on ?i1']);
+
+    var started = false;
+    you.start = function() {
+      var ret = "";
+      if (started) {
+        ret += "Okay, restarting the game from the beginning...\n\n";
+        adventure.deserialize(initialState);
+      }
+      started = true;
+      ret +=
+        "It is a warm, sunny day.  You are going to the mall by yourself.  You go to a clothing store and fall asleep while changing.\n";
+      ret += "You wake up hours later.\n\n";
+      return ret + you.look();
+    };
+
+    // PLACES
+    var changingRoom = adventure.newPlace({
+      name: "changing room",
+      id: "changingRoom",
+      description: "This is a changing room.",
+      keywords: ["changing", "changing room", "changingroom", "room"]
+    });
+
+    var clothingStore = adventure.newPlace({
+      name: "clothing store",
+      id: "clothingStore",
+      description: "This is a clothing store.",
+      keywords: ['clothing store', 'store', 'clothes store', 'room']
+    });
+
+    // EXITS
+    var openable = {
+      open: true,
+      beOpenedBy: function(subject) {
+        if (this.open) return "It's already open.";
+        this.open = true;
+        return "You have opened " + this.getDistinguishingName() + ".";
+      },
+      beClosedBy: function(subject) {
+        if (!this.open) return "It's already closed.";
+        this.open = false;
+        return "You have closed " + this.getDistinguishingName() + ".";
+      },
+      beUsedBy: function(subject) {
+        if (!this.open) return adventure.capitalize(this.getDistinguishingName()) +
+          " is closed.";
+        return this.superMethod('beUsedBy')(subject);
+      },
+      beExaminedBy: function(subject) {
+        var description = this.superMethod('beExaminedBy')(subject);
+        return description + ' ' + adventure.capitalize(this.it) + ' is ' + (this.open ? 'open' : 'closed') + '.';
+      },
+      beUnlockedBy: function(subject) {
+        return "There's no lock.";
+      },
+      beLockedBy: function(subject) {
+        return "It doesn't lock.";
+      }
+    };
+
+    // lockable from the front
+    var lockable = {
+      unlocked: true,
+      beOpenedBy: function(subject) {
+        if (this.unlocked) return openable.beOpenedBy.call(this, subject);
+        return adventure.capitalize(this.getDistinguishingName()) + " is locked.";
+      },
+      beUsedBy: function(subject) {
+        if (!this.unlocked) return adventure.capitalize(this.getDistinguishingName()) +
+          " is locked.";
+        return openable.beUsedBy.call(this, subject);
+      },
+      beExaminedBy: function(subject) {
+        var ret = this.superMethod('beExaminedBy')(subject);
+        ret += ' ' + adventure.capitalize(this.it) + ' is ' + (this.open ? 'open' : ('closed and ' + (this.unlocked ?
+          'unlocked' : 'locked'))) + '.';
+        ret += ' The slide lock is on ' + (this.isForwardExit ? 'this' : 'the other') + ' side of ' + this.definiteName +
+          '.';
+        return ret;
+      },
+      beUnlockedBy: function(subject) {
+        if (this.unlocked) return "It's already unlocked.";
+        if (this.isReverseExit) return "You can't unlock it from this side.";
+        this.unlocked = true;
+        return "You have unlocked " + this.definiteName + '.';
+      },
+      beLockedBy: function(subject) {
+        if (this.open) return "You have to close it first.";
+        if (!this.unlocked) return "It's already locked.";
+        if (this.isReverseExit) return "You can't lock it from this side.";
+        this.unlocked = false;
+        return "You have locked " + this.definiteName + '.';
+      }
+    };
+
+    var changingRoomDoor = adventure.newExit(Object.assign({}, openable, lockable, {
+      id: 'changingRoomDoor',
+      name: 'changing room door',
+      keywords: ['door', 'exit', 'changing room door'],
+      location: changingRoom,
+      direction: 'south',
+      destination: clothingStore,
+      reverseDirection: 'northwest',
+      open: false,
+      unlocked: false
+    }));
+
+    you.location = changingRoom;
+
+    // ITEMS
+
+    var initialState = adventure.serialize();
+    var previouslySavedState = hasLocalStorage && localStorage.getItem(autosaveKey);
+  </script>
+</body>
+
+</html>

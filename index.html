@@ -240,7 +240,7 @@
       return date.toString();
     };
 
-    var gameVersion = '-v0.1';
+    var gameVersion = '-thegame-v0.0.1';
     var autosaveKey = 'autosave' + gameVersion;
 
     $(function() {
@@ -367,15 +367,15 @@
       beOpenedBy: function(subject) {
         if (this.open) return "It's already open.";
         this.open = true;
-        return "You have opened " + this.definiteName + " leading " + this.direction + ".";
+        return "You have opened " + this.getDistinguishingName() + ".";
       },
       beClosedBy: function(subject) {
         if (!this.open) return "It's already closed.";
         this.open = false;
-        return "You have closed " + this.definiteName + " leading " + this.direction + ".";
+        return "You have closed " + this.getDistinguishingName() + ".";
       },
       beUsedBy: function(subject) {
-        if (!this.open) return adventure.capitalize(this.definiteName) + " leading " + this.direction +
+        if (!this.open) return adventure.capitalize(this.getDistinguishingName()) +
           " is closed.";
         return this.superMethod('beUsedBy')(subject);
       },
