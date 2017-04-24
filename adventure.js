@@ -721,6 +721,7 @@ function Adventure() {
   });
 
   var interpretInput = this.interpretInput = function interpretInput(subject, str) {
+    var origStr = str;
     str = str.toLowerCase().replace(/[^a-z0-9 ]/g, '');
     str = str.replace(/\s+/g, ' ').trim();
     str = str.replace(/\bplease( |$)/g, '').trim(); // no need to be polite 
@@ -744,7 +745,10 @@ function Adventure() {
       //TODO maybe they should be ordered by number of item/dirs, or length of words?
     }
 
-    var confusingInput = null;
+    var confusingInput = {
+      matchDepth: -1,
+      str: str
+    };
     templateLoop: for (var i = 0; i < interpretInput.templates.length; i++) {
       var template = interpretInput.templates[i];
       var m = str;
@@ -778,12 +782,10 @@ function Adventure() {
                   return !subject.canSee(it);
                 }));
                 if (!result) {
-                  if (!confusingInput) {
-                    confusingInput = {
-                      type: 'an item',
-                      input: m
-                    };
-                  }
+                  if (confusingInput.matchDepth <= j) confusingInput = {
+                    matchDepth: j,
+                    str: m
+                  };
                   continue templateLoop; // not an item
                 }
               }
@@ -795,12 +797,10 @@ function Adventure() {
             // interpret as exit
             result = parseExitAndRemainder(subject, m);
             if (!result) {
-              if (!confusingInput) {
-                confusingInput = {
-                  type: 'an exit',
-                  input: m
-                };
-              }
+              if (confusingInput.matchDepth <= j) confusingInput = {
+                matchDepth: j,
+                str: m
+              };
               continue templateLoop; // not an exit
             }
             ret.parameters[paramIndex] = result.exit;
@@ -811,7 +811,7 @@ function Adventure() {
           }
           m = result.remainder;
         } else {
-          if (!(m + ' ').startsWith(token)) {
+          if (!(m + ' ').startsWith(token + ' ')) {
             // doesn't match
             continue templateLoop;
           }
@@ -822,12 +822,16 @@ function Adventure() {
       if (m.length == 0) {
         return ret;
       }
+      if (confusingInput.matchDepth <= j) confusingInput = {
+        matchDepth: j,
+        str: m
+      };
     }
-    // no match
+    // no match    
+    if (confusingInput.str === str) confusingInput.str = origStr;
     return {
       success: false,
-      confusingInputType: (confusingInput ? confusingInput.type : 'a command'),
-      confusingInput: (confusingInput ? confusingInput.input : str)
+      confusingInput: confusingInput.str
     };
   }
 
