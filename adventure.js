@@ -514,7 +514,7 @@ function Adventure() {
       }
       return this.use(exit);
     }
-    go.templates = ['go ?d1', '?d1', 'move ?d1', 'walk ?d1'];
+    go.templates = ['go %d1', '%d1', 'move %d1', 'walk %d1'];
     go.help = 'Go in the specified direction, like North or South.';
     this.go = go;
 
@@ -524,7 +524,7 @@ function Adventure() {
       }
       return this.go(dir);
     };
-    climb.templates = ['climb', 'climb ?d1'];
+    climb.templates = ['climb', 'climb %d1'];
     this.climb = climb;
 
     var look = function look() {
@@ -535,14 +535,14 @@ function Adventure() {
     look.help = 'Look around you.';
     this.look = look;
 
-    this.addCommand('take', 'beTakenBy', ['take ?i1', 't ?i1', 'get ?i1', 'pick up ?i1', 'pickup ?i1',
-        'pick ?i1 up'
+    this.addCommand('take', 'beTakenBy', ['take %i1', 't %i1', 'get %i1', 'pick up %i1', 'pickup %i1',
+        'pick %i1 up'
       ],
       'Pick up an item.');
 
-    this.addCommand('drop', 'beDroppedBy', ['drop ?i1', 'dr ?i1', 'put down ?i1', 'put ?i1 down', 'let ?i1 go',
-      'let go of ?i1',
-      'let go ?i1', 'release ?i1'
+    this.addCommand('drop', 'beDroppedBy', ['drop %i1', 'dr %i1', 'put down %i1', 'put %i1 down', 'let %i1 go',
+      'let go of %i1',
+      'let go %i1', 'release %i1'
     ], 'Put down an item.');
 
     var inventory = function inventory() {
@@ -569,7 +569,7 @@ function Adventure() {
           return t.split(/\s+/)[0].length == 1;
         });
         return '"' + c.templates[0].toLowerCase().split(/\s+/).map(function(x) {
-          return x.startsWith('?i') ? '[ITEM]' : x.startsWith('?d') ? '[DIRECTION]' : capitalize(x);
+          return x.startsWith('%i') ? '[ITEM]' : x.startsWith('%d') ? '[DIRECTION]' : capitalize(x);
         }).join(' ') + '": ' + c.help + (shortcut ? ' (Shortcut: "' + shortcut.charAt(0).toUpperCase() +
           '")' :
           '');
@@ -586,12 +586,12 @@ function Adventure() {
       });
     };
 
-    this.addCommand('examine', 'beExaminedBy', ['examine ?i1', 'x ?i1', 'look ?i1', 'look at ?i1', 'l ?i1',
-        'l at ?i1'
+    this.addCommand('examine', 'beExaminedBy', ['examine %i1', 'x %i1', 'look %i1', 'look at %i1', 'l %i1',
+        'l at %i1'
       ],
       'Examine an item.');
 
-    this.addCommand('use', 'beUsedBy', ['use ?i1', 'use ?i1 with ?i2', 'use ?i1 on ?i2'], 'Use an item in some way.');
+    this.addCommand('use', 'beUsedBy', ['use %i1', 'use %i1 with %i2', 'use %i1 on %i2'], 'Use an item in some way.');
 
   }
   Person.prototype = Object.create(Item.prototype);
@@ -732,10 +732,7 @@ function Adventure() {
           var pattern = t.toLowerCase().split(/\s+/);
           return {
             func: c,
-            pattern: pattern //,
-            //        regexp: new RegExp('^'+(pattern.map(function(s){return s.charAt(0)=='?' ? '(.*)' : s.replace(/[^a-z0-9 ]/g,'');}).join(' '))+'$'),
-            //        paramOrder: pattern.filter(function(s){return s.charAt(0)=='?';}).map(function(s){return parseInt(s.substring(2),10);}),
-            //        numTokens: pattern.filter(function(s){return s.charAt(0)!='?';}).length
+            pattern: pattern 
           };
         });
       }));
@@ -760,7 +757,7 @@ function Adventure() {
       };
       for (var j = 0; j < template.pattern.length; j++) {
         var token = template.pattern[j];
-        if (token.charAt(0) == '?') {
+        if (token.charAt(0) == '%') {
           var paramIndex = parseInt(token.substring(2), 10) - 1;
           if (!(paramIndex >= 0)) {
             console.log('bad pattern index in: ' + template.pattern.join(' '));
@@ -975,9 +972,76 @@ function Adventure() {
       return curBlankResponses.splice(Math.floor(Math.random() * curBlankResponses.length), 1)[0];
     }
 
-    return "Sorry, I don't understand \"" + interpretation.confusingInput + "\".  Type \"help\" for help."
+    var confused = interpretation.confusingInput ? ('"'+interpretation.confusingInput+'"') : 'that';
+    return "Sorry, I don't understand " + confused + ".  Type \"help\" for help."
 
   }
   A.respond = respond;
 
 };
+
+// SCRATCHPAD WORK FOR BETTER MATCHES
+
+function commandMatches(subject, str) { 
+  str = str.replace(/[^a-z0-9 ]/ig,'').replace(/\s+/g, ' ').trim();
+  str = str.replace(/\bplease( |$)/g, '').trim(); // no need to be polite;
+  var argRe = /%[id]\d*/g;
+  var allMatches = [];
+  subject.commands().forEach(function(command){
+    command.templates.forEach(function(template){
+      var lens = [];
+      while (true) {
+        // build a regular expression to match this template to the string, making sure to preclude
+        // any previous matches by limiting the length of the matches
+        var i = 0;
+        var func = function (str, offset) {
+          var ret = (typeof lens[i] === 'number') ? ('\\b(.{1,' + lens[i] + '})\\b')  : '\\b(.+)\\b';
+          i++;
+          return ret;
+        };
+        var re = new RegExp('^(?:' + template.replace(argRe, func) + ')$', 'i');           
+        var matches = str.match(re);
+        if (matches) {
+          matches = matches.slice(1);      
+          var args = [];
+          var params = (template.match(argRe)||[]);
+          var unknownArg = 1;
+          for (var j=0; j<matches.length; j++) {
+              var param = params[j];
+              var match = matches[j];
+              var type = param.charAt(1);
+              var argNum = (parseInt(param.substring(2),10) || unknownArg) -1;
+              unknownArg = argNum+2;
+              args[argNum]={type:type, str:match};
+          }
+          lens = matches.map(function (m) {
+            return m.length;
+          }); 
+          var totalMatchedLength = lens.reduce(function(s,l){return s+l;},0);
+          allMatches.push({          
+            command: command,
+            template: template,
+            args: args,
+            totalMatchedLength: totalMatchedLength            
+          });
+
+        } else {           
+          lens.pop();
+        }        
+        while (true) {
+          var lenlen = lens.length;
+          if (!lenlen) return;
+          lenlen--;
+          lens[lenlen]--;
+          if (lens[lenlen] > 0) {
+            break;
+          }
+          lens.pop();
+        }             
+      }
+    });    
+  });
+  allMatches.sort(function(a,b){return a.totalMatchedLength - b.totalMatchedLength;});
+  allMatches.forEach(function(m){delete m.totalMatchedLength;});
+  return allMatches;  
+}
