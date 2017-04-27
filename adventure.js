@@ -1045,3 +1045,65 @@ function commandMatches(subject, str) {
   allMatches.forEach(function(m){delete m.totalMatchedLength;});
   return allMatches;  
 }
+
+
+ function itemMatches(subject, str, itemList) {
+    str = str.toLowerCase().replace(/^(the|a|an) /i, '').trim(); // strip off articles        
+    if (!itemList) {
+      itemList = allItems().filter(function(x){ return x.known;}).sort(function(x,y){return +subject.canSee(y)-subjectcanSee(x);});
+    }   
+    var allMatches = [];
+    itemList.forEach(function(it){
+      it.keywords.some(function(kw){        
+         if (kw.toLowerCase().trim()==str) {
+            allMatches.push(it);
+            return true; // break
+         }
+      });              
+    });
+    return allMatches;
+  }
+  
+  
+function directionMatches(subject, str) {   
+    str = str.toLowerCase().replace(/^(leading) /i, '').trim(); // strip off 'leading'  
+    str = str.toLowerCase().replace(/^(on|to|toward) /i, '').trim(); // strip off directional words
+    str = str.toLowerCase().replace(/^(the|a|an) /i, '').trim(); // strip off articles    
+    if (str in dirs) {
+      return [dirs[str]];
+    }
+    return []; // couldn't find direction  
+}
+
+function splitAtEachSpace(str) {
+  str = ' '+(str.replace(/\s+/g,' ').trim())+' ';
+  var ret = [];
+  for (var i=0; i>=0; i=str.indexOf(' ',i+1)) {
+    ret.push([str.slice(1,i),str.slice(i+1,str.length-1)]);
+  }
+  return ret;
+}
+
+function exitMatches(subject, str) {
+  
+     var loc = subject.location;
+     var knownNearbyExits = allItems().filter(function(it) {
+      return (it.known) && (it instanceof Exit) && (it.location === loc);
+     });
+
+     var matches = [];
+     
+     knownNearbyExits.forEach(function(ex){
+        // does str match EXIT+DIRECTION
+        
+        // does str match DIRECTION+EXIT
+        
+        // does str match DIRECTION ALONE
+
+        // does str match EXIT ALONE       
+     });
+     
+      // put in quality of match, then sort by quality, return all
+
+  
+}
