@@ -1,7 +1,7 @@
 "use strict";
 
 //TODO limit to inventory?
-//TODO maybe ambiguous items should be a warning error rather than first-found...
+//TODO maybe ambiguous items should be a warning error rather than first-found?
 //TODO "jump"
 //TODO "put ___ in/on ____"
 
@@ -79,13 +79,6 @@ function Adventure() {
       'bottom'
     ]
   };
-  var dirs = {};
-  Object.keys(directions).forEach(function(k) {
-    dirs[k] = k;
-    directions[k].forEach(function(v) {
-      dirs[v] = k;
-    });
-  });
 
   var oppositeDirections = {
     north: 'south',
@@ -99,12 +92,14 @@ function Adventure() {
   });
 
   var dirRegExps = {};
-  Object.keys(directions).forEach(function(k){
-    var re = '(?:leading )?(?:on |to |toward )?(?:the |a |an )?(?:'+k+'|'+directions[k].join('|')+')';
-    dirRegExps[k] = {start: new RegExp('^'+re+'\\s*(.*)$'), end: new RegExp('^(.*?)\\s*'+re+'$')};
+  Object.keys(directions).forEach(function(k) {
+    var re = '(?:leading )?(?:on |to |toward )?(?:the |a |an )?(?:' + k + '|' + directions[k].join('|') + ')';
+    dirRegExps[k] = {
+      start: new RegExp('^' + re + '(?:^|\\s+)(.*)$', 'i'),
+      end: new RegExp('^(.*?)(?:^|\\s+)' + re + '$', 'i')
+    };
   });
-  
-  
+
   // KEEP A MAP OF ALL ITEMS IN THE ADVENTURE
   var itemMap = {};
 
@@ -719,6 +714,7 @@ function Adventure() {
       id: 'no-exit-' + k,
       name: 'exit leading ' + k,
       definiteName: 'an exit leading ' + k,
+      keywords: ['exit', 'door'],
       direction: k,
       location: null,
       destination: null,
@@ -727,237 +723,6 @@ function Adventure() {
     });
   });
 
-  var interpretInput = this.interpretInput = function interpretInput(subject, str) {
-    var origStr = str;
-    str = str.toLowerCase().replace(/[^a-z0-9 ]/g, '');
-    str = str.replace(/\s+/g, ' ').trim();
-    str = str.replace(/\bplease( |$)/g, '').trim(); // no need to be polite 
-    // sort templates by length
-    if (!interpretInput.templates) {
-      interpretInput.templates = flatten(subject.commands().map(function(c) {
-        return c.templates.map(function(t) {
-          var pattern = t.toLowerCase().split(/\s+/);
-          return {
-            func: c,
-            pattern: pattern 
-          };
-        });
-      }));
-      interpretInput.templates.sort(function(x, y) {
-        return y.pattern.length - x.pattern.length;
-      });
-      //TODO maybe they should be ordered by number of item/dirs, or length of words?
-    }
-
-    var confusingInput = {
-      matchDepth: -1,
-      str: str
-    };
-    templateLoop: for (var i = 0; i < interpretInput.templates.length; i++) {
-      var template = interpretInput.templates[i];
-      var m = str;
-      var ret = {
-        success: true,
-        func: template.func,
-        parameters: [],
-        template: template.pattern.join(' ')
-      };
-      for (var j = 0; j < template.pattern.length; j++) {
-        var token = template.pattern[j];
-        if (token.charAt(0) == '%') {
-          var paramIndex = parseInt(token.substring(2), 10) - 1;
-          if (!(paramIndex >= 0)) {
-            console.log('bad pattern index in: ' + template.pattern.join(' '));
-            continue templateLoop;
-          }
-          var result;
-          if (token.charAt(1) == 'i') {
-            // interpret as an item or exit?
-            result = parseExitAndRemainder(subject, m);
-            if ((!result) || (result.noExit)) {
-              var knownItems = allItems().filter(function(it) {
-                return it.known;
-              });
-              result = parseItemAndRemainder(subject, m, knownItems.filter(function(it) {
-                return subject.canSee(it);
-              }));
-              if (!result) {
-                result = parseItemAndRemainder(subject, m, knownItems.filter(function(it) {
-                  return !subject.canSee(it);
-                }));
-                if (!result) {
-                  if (confusingInput.matchDepth <= j) confusingInput = {
-                    matchDepth: j,
-                    str: m
-                  };
-                  continue templateLoop; // not an item
-                }
-              }
-              ret.parameters[paramIndex] = result.item;
-            } else {
-              ret.parameters[paramIndex] = result.exit;
-            }
-          } else if (token.charAt(1) == 'd') {
-            // interpret as exit
-            result = parseExitAndRemainder(subject, m);
-            if (!result) {
-              if (confusingInput.matchDepth <= j) confusingInput = {
-                matchDepth: j,
-                str: m
-              };
-              continue templateLoop; // not an exit
-            }
-            ret.parameters[paramIndex] = result.exit;
-          } else {
-            // don't recognize the type of pattern word
-            console.log('bad pattern type in: ' + template.pattern.join(' '));
-            continue templateLoop;
-          }
-          m = result.remainder;
-        } else {
-          if (!(m + ' ').startsWith(token + ' ')) {
-            // doesn't match
-            continue templateLoop;
-          }
-          m = m.substring(token.length + 1); // remove a space or go off the end, which is fine				
-        }
-      }
-      // we made it!  Or did we?  If there's stuff after the match, it's not a match
-      if (m.length == 0) {
-        return ret;
-      }
-      if (confusingInput.matchDepth <= j) confusingInput = {
-        matchDepth: j,
-        str: m
-      };
-    }
-    // no match    
-    if (confusingInput.str === str) confusingInput.str = origStr;
-    return {
-      success: false,
-      confusingInput: confusingInput.str
-    };
-  }
-
-  function flatten(arrayOfArray) {
-    return [].concat.apply([], arrayOfArray);
-  }
-
-  function parseDirectionAndRemainder(subject, str) {
-    str = str.toLowerCase().replace(/^(leading) /i, '').trim(); // strip off 'leading'  
-    str = str.toLowerCase().replace(/^(on|to|toward) /i, '').trim(); // strip off directional words
-    str = str.toLowerCase().replace(/^(the|a|an) /i, '').trim(); // strip off articles
-    var space = (str + ' ').indexOf(' ');
-    if (!space) return null; // no words
-    var word = str.substring(0, space);
-    var remainder = str.substring(space + 1);
-    if (word in dirs) {
-      return {
-        direction: dirs[word],
-        remainder: remainder
-      };
-    }
-    return null; // couldn't find direction
-  }
-
-  function parseExitAndRemainder(subject, str) {
-    var loc = subject.location;
-    var knownNearbyExits = allItems().filter(function(it) {
-      return (it.known) && (it instanceof Exit) && (it.location === loc);
-    });
-
-    var startsWithExit = parseItemAndRemainder(subject, str, knownNearbyExits);
-    if (startsWithExit) {
-      // see if the next word is a direction
-      var followedByDirection = parseDirectionAndRemainder(subject, startsWithExit.remainder);
-      if (followedByDirection) {
-        // okay, we found something.  Now let's see if that matches up with the exit in that direction
-        var theExit = knownNearbyExits.find(function(it) {
-          return it.direction === followedByDirection.direction
-        });
-        if (theExit) {
-          // there is an exit in this direction, but the user might have used the wrong name for it
-          startsWithExit = parseItemAndRemainder(subject, str, [theExit]);
-          if (startsWithExit) {
-            followedByDirection = parseDirectionAndRemainder(subject, startsWithExit.remainder);
-            if (followedByDirection && followedByDirection.direction === theExit.direction) {
-              // this works
-              return {
-                exit: theExit,
-                remainder: followedByDirection.remainder
-              };
-            }
-            // the exit is not in the direction specified... try other matches
-          } // the exit is not in the direciton specified... try other matches            
-        } // there is no exit in that direction.  Blah            
-      } // there is no direction afterward, but so just the exit was specified
-      return {
-        exit: startsWithExit.item,
-        remainder: startsWithExit.remainder
-      };
-    }
-
-    var startsWithDirection = parseDirectionAndRemainder(subject, str);
-    if (startsWithDirection) {
-      var theExit = knownNearbyExits.find(function(it) {
-        return it.direction === startsWithDirection.direction;
-      });
-      if (theExit) {
-        var followedByExit = parseItemAndRemainder(subject, startsWithDirection.remainder, [theExit]);
-        if (followedByExit) {
-          return {
-            exit: theExit,
-            remainder: followedByExit.remainder
-          };
-        }
-        // not followed by an exit word, but the direction will specify the exit
-        return {
-          exit: theExit,
-          remainder: startsWithDirection.remainder
-        };
-      }
-      // there is no exit in this direction, but we definitely specified a direction
-      // Let's return the direction with no exit?
-      return {
-        exit: noExit[startsWithDirection.direction],
-        remainder: startsWithDirection.remainder
-      };
-    }
-    return null; // no exit item, no direction, forget it           
-  }
-
-  function parseItemAndRemainder(subject, str, itemList) {
-    str = str.toLowerCase().replace(/^(the|a|an) /i, ''); // strip off articles
-
-    itemList = itemList || allItems().filter(function(x) {
-      return x.known;
-    });
-    // get keywords for all acceptable items
-    var theItems = flatten(itemList.map(function(x) {
-      var canSee = subject.canSee(x);
-      return x.keywords.map(function(k) {
-        return {
-          keyword: k.toLowerCase(),
-          canSee: canSee,
-          item: x
-        };
-      });
-    }));
-
-    // sort these items so that nearby items are more likely to be identified,
-    // and do the longest match first
-    theItems.sort(function(x, y) {
-      return y.keyword.length - x.keyword.length;
-    });
-    var found = theItems.find(function(x) {
-      return str.startsWith(x.keyword);
-    });
-    if (!found) return null;
-    return {
-      item: found.item,
-      remainder: str.substring(found.keyword.length).trim()
-    };
-  }
   var blankResponses = ["What?", "Come again?", "Sorry, I didn't hear you.", "Did you say something?",
     "Are you confused?  Type \"help\" for help.", "I don't follow.", "You should probably type something.",
     "Sorry, I don't speak mime.", "Try using words to express yourself.",
@@ -979,151 +744,170 @@ function Adventure() {
       return curBlankResponses.splice(Math.floor(Math.random() * curBlankResponses.length), 1)[0];
     }
 
-    var confused = interpretation.confusingInput ? ('"'+interpretation.confusingInput+'"') : 'that';
+    var confused = interpretation.confusingInput ? ('"' + interpretation.confusingInput + '"') : 'that';
     return "Sorry, I don't understand " + confused + ".  Type \"help\" for help."
 
   }
   A.respond = respond;
 
-  
-// SCRATCHPAD WORK FOR BETTER MATCHES
-
-function commandMatches(subject, str) { 
-  str = str.replace(/[^a-z0-9 ]/ig,'').replace(/\s+/g, ' ').trim();
-  str = str.replace(/\bplease( |$)/g, '').trim(); // no need to be polite;
-  var argRe = /%[id]\d*/g;
-  var allMatches = [];
-  subject.commands().forEach(function(command){
-    command.templates.forEach(function(template){
-      var lens = [];
-      while (true) {
-        // build a regular expression to match this template to the string, making sure to preclude
-        // any previous matches by limiting the length of the matches
-        var i = 0;
-        var func = function (str, offset) {
-          var ret = (typeof lens[i] === 'number') ? ('\\b(.{1,' + lens[i] + '})\\b')  : '\\b(.+)\\b';
-          i++;
-          return ret;
-        };
-        var re = new RegExp('^(?:' + template.replace(argRe, func) + ')$', 'i');           
-        var matches = str.match(re);
-        if (matches) {
-          matches = matches.slice(1);      
-          var args = [];
-          var params = (template.match(argRe)||[]);
-          var unknownArg = 1;
-          for (var j=0; j<matches.length; j++) {
+  function getCommandMatches(subject, str) {
+    str = str.replace(/[^a-z0-9 ]/ig, '').replace(/\s+/g, ' ').trim();
+    str = str.replace(/\bplease( |$)/g, '').trim(); // no need to be polite;
+    var argRe = /%[id]\d*/g;
+    var allMatches = [];
+    subject.commands().forEach(function(command) {
+      command.templates.forEach(function(template) {
+        var lens = [];
+        while (true) {
+          // build a regular expression to match this template to the string, making sure to preclude
+          // any previous matches by limiting the length of the matches
+          var i = 0;
+          var func = function(str, offset) {
+            var ret = (typeof lens[i] === 'number') ? ('\\b(.{1,' + lens[i] + '})\\b') : '\\b(.+)\\b';
+            i++;
+            return ret;
+          };
+          var re = new RegExp('^(?:' + template.replace(argRe, func) + ')$', 'i');
+          var matches = str.match(re);
+          if (matches) {
+            matches = matches.slice(1);
+            var args = [];
+            var params = (template.match(argRe) || []);
+            var unknownArg = 1;
+            for (var j = 0; j < matches.length; j++) {
               var param = params[j];
               var match = matches[j];
               var type = param.charAt(1);
-              var argNum = (parseInt(param.substring(2),10) || unknownArg) -1;
-              unknownArg = argNum+2;
-              args[argNum]={type:type, str:match};
+              var argNum = (parseInt(param.substring(2), 10) || unknownArg) - 1;
+              unknownArg = argNum + 2;
+              args[argNum] = {
+                type: type,
+                str: match
+              };
+            }
+            lens = matches.map(function(m) {
+              return m.length;
+            });
+            var totalMatchedLength = lens.reduce(function(s, l) {
+              return s + l;
+            }, 0);
+            allMatches.push({
+              command: command,
+              template: template,
+              args: args,
+              totalMatchedLength: totalMatchedLength
+            });
+
+          } else {
+            lens.pop();
           }
-          lens = matches.map(function (m) {
-            return m.length;
-          }); 
-          var totalMatchedLength = lens.reduce(function(s,l){return s+l;},0);
-          allMatches.push({          
-            command: command,
-            template: template,
-            args: args,
-            totalMatchedLength: totalMatchedLength            
-          });
-
-        } else {           
-          lens.pop();
-        }        
-        while (true) {
-          var lenlen = lens.length;
-          if (!lenlen) return;
-          lenlen--;
-          lens[lenlen]--;
-          if (lens[lenlen] > 0) {
-            break;
+          while (true) {
+            var lenlen = lens.length;
+            if (!lenlen) return;
+            lenlen--;
+            lens[lenlen]--;
+            if (lens[lenlen] > 0) {
+              break;
+            }
+            lens.pop();
           }
-          lens.pop();
-        }             
-      }
-    });    
-  });
-  allMatches.sort(function(a,b){return a.totalMatchedLength - b.totalMatchedLength;});
-  allMatches.forEach(function(m){delete m.totalMatchedLength;});
-  return allMatches;  
-}
-
-
- function itemMatches(subject, str, itemList) {
-    str = str.toLowerCase().replace(/^(the|a|an) /i, '').trim(); // strip off articles        
-    if (!itemList) {
-      itemList = allItems().filter(function(x){ return x.known;}).sort(function(x,y){return +subject.canSee(y)-subjectcanSee(x);});
-    }   
-    var allMatches = [];
-    itemList.forEach(function(it){
-      it.keywords.some(function(kw){        
-         if (kw.toLowerCase().trim()==str) {
-            allMatches.push(it);
-            return true; // break
-         }
-      });              
+        }
+      });
+    });
+    allMatches.sort(function(a, b) {
+      return a.totalMatchedLength - b.totalMatchedLength;
+    });
+    allMatches.forEach(function(m) {
+      delete m.totalMatchedLength;
     });
     return allMatches;
   }
-  
-  
-function directionMatches(subject, str) {
-    str = str.toLowerCase().replace(/^(leading) /i, '').trim(); // strip off 'leading'  
-    str = str.toLowerCase().replace(/^(on|to|toward) /i, '').trim(); // strip off directional words
-    str = str.toLowerCase().replace(/^(the|a|an) /i, '').trim(); // strip off articles    
-    if (str in dirs) {
-      return [dirs[str]];
-    }
-    return []; // couldn't find direction  
-}
 
-function splitAtEachSpace(str) {
-  str = ' '+(str.replace(/\s+/g,' ').trim())+' ';
-  var ret = [];
-  for (var i=0; i>=0; i=str.indexOf(' ',i+1)) {
-    ret.push([str.slice(1,i),str.slice(i+1,str.length-1)]);
+  function matchStringToItem(subject, str, item) {
+    // assume that string is alphanumeric separated by single spaces  
+    // check to see if item is a nearby exit specified by direction
+    if ((item instanceof Exit) && (item.noExit || (item.location === subject.location)) && item.direction) {
+      var matches = str.match(dirRegExps[item.direction].start) || str.match(dirRegExps[item.direction].end);
+      if (matches) {
+        str = matches[1]; // strip direction specifier off
+        if (!str) return true; //specifying just the direction is considered a match                    
+      }
+    }
+    // see if it matches any of the item's keywords
+    str = str.toLowerCase().replace(/^(the|a|an) /i, '').trim(); // strip off articles
+    for (var i = 0; i < item.keywords.length; i++) {
+      if (str === item.keywords[i].toLowerCase())
+        return true;
+    }
+    return false; // didn't match any keywords or direction... it's not a match.
   }
-  return ret;
-}
 
-/*
-function matchStringToItem(subject, str, item) {
-    if ((item instanceof Exit) && (item.location === subject.location)) {
-       // this item may be just a direction
-        if (directionMaches(subject,str))
-    
+  function interpretInput(subject, str) {
+
+    var commandMatches = getCommandMatches(subject, str);
+
+    if (!commandMatches.length) return {
+      success: false,
+      confusingInput: str
+    };
+
+    var exits = null;
+    var getExits = function() {
+      if (!exits) {
+        exits = allItems().filter(function(it) {
+          return (it.known) && (it instanceof Exit) && (it.location === subject.location);
+        });
+        exits.push.apply(exits, objectValues(noExit));
+      }
+      return exits;
+    };
+    var items = null;
+    var getItems = function() {
+      if (!items) {
+        items = allItems().filter(function(it) {
+          return (it.known);
+        });
+        items.sort(function(x, y) {
+          return +subject.canSee(y) - subject.canSee(x);
+        });
+        items.push.apply(items, objectValues(noExit));
+      }
+      return items;
+    };
+
+    var confusingArgNumber = -1;
+    var confusingInput = null;
+    commandLoop: for (var i = 0; i < commandMatches.length; i++) {
+      var commandMatch = commandMatches[i];
+      var params = [];
+      argLoop: for (var j = 0; j < commandMatch.args.length; j++) {
+        var arg = commandMatch.args[j];
+        var itemsToSearch = (arg.type.toLowerCase() == 'd') ? getExits() : getItems();
+        itemLoop: for (var k = 0; k < itemsToSearch.length; k++) {
+          var itemToSearch = itemsToSearch[k];
+          if (matchStringToItem(subject, arg.str, itemToSearch)) {
+            params[j] = itemToSearch;
+            continue argLoop;
+          }
+        }
+        if (j > confusingArgNumber) {
+          confusingInput = arg.str;
+          confusingArgNumber = j;
+        }
+        // the string doesn't match any item so maybe this isn't the right command        
+        continue commandLoop;
+      }
+      return {
+        success: true,
+        func: commandMatch.command,
+        parameters: params
+      };
     }
+    return {
+      success: false,
+      confusingInput: confusingInput
+    };
 
-}
-*/
-function exitMatches(subject, str) {
-  
-     var loc = subject.location;
-     var knownNearbyExits = allItems().filter(function(it) {
-      return (it.known) && (it instanceof Exit) && (it.location === loc);
-     });
+  };
 
-     var matches = [];
-     
-     knownNearbyExits.forEach(function(ex){
-        // does str match EXIT+DIRECTION
-        
-        // does str match DIRECTION+EXIT
-        
-        // does str match DIRECTION ALONE
-
-        // does str match EXIT ALONE       
-     });
-     
-      // put in quality of match, then sort by quality, return all
-
-  
-}
-  
-  
-  
 };
