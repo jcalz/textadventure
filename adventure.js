@@ -98,6 +98,13 @@ function Adventure() {
     oppositeDirections[oppositeDirections[dir]] = dir;
   });
 
+  var dirRegExps = {};
+  Object.keys(directions).forEach(function(k){
+    var re = '(?:leading )?(?:on |to |toward )?(?:the |a |an )?(?:'+k+'|'+directions[k].join('|')+')';
+    dirRegExps[k] = {start: new RegExp('^'+re+'\\s*(.*)$'), end: new RegExp('^(.*?)\\s*'+re+'$')};
+  });
+  
+  
   // KEEP A MAP OF ALL ITEMS IN THE ADVENTURE
   var itemMap = {};
 
@@ -978,8 +985,7 @@ function Adventure() {
   }
   A.respond = respond;
 
-};
-
+  
 // SCRATCHPAD WORK FOR BETTER MATCHES
 
 function commandMatches(subject, str) { 
@@ -1065,7 +1071,7 @@ function commandMatches(subject, str) {
   }
   
   
-function directionMatches(subject, str) {   
+function directionMatches(subject, str) {
     str = str.toLowerCase().replace(/^(leading) /i, '').trim(); // strip off 'leading'  
     str = str.toLowerCase().replace(/^(on|to|toward) /i, '').trim(); // strip off directional words
     str = str.toLowerCase().replace(/^(the|a|an) /i, '').trim(); // strip off articles    
@@ -1084,6 +1090,16 @@ function splitAtEachSpace(str) {
   return ret;
 }
 
+/*
+function matchStringToItem(subject, str, item) {
+    if ((item instanceof Exit) && (item.location === subject.location)) {
+       // this item may be just a direction
+        if (directionMaches(subject,str))
+    
+    }
+
+}
+*/
 function exitMatches(subject, str) {
   
      var loc = subject.location;
@@ -1107,3 +1123,7 @@ function exitMatches(subject, str) {
 
   
 }
+  
+  
+  
+};
