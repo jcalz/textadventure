@@ -65,6 +65,33 @@ function Adventure() {
     return obj;
   }
 
+  function enforceItemPropertyImmutability(item, options) {
+    var immutableProperties = {};
+    Object.keys(options).forEach(function(prop) {
+      var v = options[prop];
+      var immutable = false;
+      if (v instanceof MutabilityMarker) {
+        immutable = !v.mutable;
+        v = v.object;
+      }
+      if (immutable) {
+        immutableProperties[prop] = true;
+      }
+      item[prop] = v;
+    });
+
+    var o = {
+      configurable: false,
+      enumerable: true,
+      writable: false
+    };
+    // make immutable properties immutable
+    Object.keys(immutableProperties).forEach(function(prop) {
+      Object.defineProperty(item, prop, o);
+    });
+    return immutableProperties;
+  }
+
   var directions = {
     north: ['n', 'northern', 'northward', 'northwards'],
     south: ['s', 'southern', 'southward', 'southwards'],
@@ -99,6 +126,28 @@ function Adventure() {
       end: new RegExp('^(.*?)(?:^|\\s+)' + re + '$', 'i')
     };
   });
+
+  function getDefaultNames(name, plural) {
+    var ret = {};
+
+    if (plural) {
+      ret.pluralName = name;
+    } else if ((/[^aeiou]y$/i).test(name)) {
+      ret.pluralName = name.substring(0, name.length - 1) + 'ies';
+    } else if ((/(s|x|z|ch|sh)$/i).test(name)) {
+      ret.pluralName = name + 'es';
+    } else {
+      ret.pluralName = name + 's';
+    }
+    ret.keywords = [name.toLowerCase().replace(/[^a-z0-9 ]/g, '')];
+    ret.definiteName = 'the ' + name;
+    ret.indefiniteName = plural ? name : ('aeiou'.indexOf(name.charAt(0).toLowerCase()) >=
+      0 ? 'an ' :
+      'a ') + name;
+    ret.it = plural ? 'they' : 'it';
+    return ret;
+
+  };
 
   // KEEP A MAP OF ALL ITEMS IN THE ADVENTURE
   var itemMap = {};
@@ -175,59 +224,26 @@ function Adventure() {
     };
 
     var plural = unwrap(options.plural);
-
-    var pluralName = name;
-    if (plural) {
-      pluralName = name;
-    } else if ((/[^aeiou]y$/i).test(name)) {
-      pluralName = name.substring(0, name.length - 1) + 'ies';
-    } else if ((/(s|x|z|ch|sh)$/i).test(name)) {
-      pluralName = name + 'es';
-    } else {
-      pluralName = name + 's';
-    }
-
+    var defaultNames = getDefaultNames(name, plural);
     options.description = immutable(options.description || null);
-    options.keywords = immutable(options.keywords || [name.toLowerCase().replace(/[^a-z0-9 ]/g, '')]);
+    options.keywords = immutable(options.keywords || defaultNames.keywords);
     options.plural = immutable('plural' in options ? options.plural : false);
-    options.definiteName = immutable(options.definiteName || ('the ' + name));
-    options.indefiniteName = immutable(options.indefiniteName || (plural ? name : ('aeiou'.indexOf(name.charAt(0).toLowerCase()) >=
-      0 ? 'an ' :
-      'a ') + name));
-    options.pluralName = immutable(options.pluralName || pluralName);
-    options.it = immutable(options.it || (plural ? 'they' : 'it'));
+    options.definiteName = immutable(options.definiteName || defaultNames.definiteName);
+    options.indefiniteName = immutable(options.indefiniteName || defaultNames.indefiniteName);
+    options.pluralName = immutable(options.pluralName || defaultNames.pluralName);
+    options.it = immutable(options.it || defaultNames.it);
     options.canBeTaken = immutable('canBeTaken' in options ? options.canBeTaken : true);
     options.location = mutable(options.location || null);
     options.hidden = 'hidden' in options ? mutable(options.hidden) : immutable(false);
     options.unlisted = 'unlisted' in options ? mutable(options.unlisted) : immutable(false);
     options.known = mutable('known' in options ? options.known : false);
 
-    Object.keys(options).forEach(function(prop) {
-      var v = options[prop];
-      var immutable = false;
-      if (v instanceof MutabilityMarker) {
-        immutable = !v.mutable;
-        v = v.object;
-      }
-      if (immutable) {
-        immutableProperties[prop] = true;
-      }
-      item[prop] = v;
-    });
-
+    var location = options.location;
+    delete options.location;
+    immutableProperties = enforceItemPropertyImmutability(item, options);
+    if ((location instanceof MutabilityMarker) && !(location.mutable)) immutableProperties.location = true;
+    location = unwrap(location);
     var o = {
-      configurable: false,
-      enumerable: true,
-      writable: false
-    };
-    // make immutable properties immutable
-    Object.keys(immutableProperties).forEach(function(prop) {
-      if (prop === 'location') return;
-      Object.defineProperty(item, prop, o);
-    });
-
-    var location = item.location;
-    o = {
       configurable: false,
       enumerable: true,
       get: function() {
@@ -242,7 +258,6 @@ function Adventure() {
         location = l;
       };
     }
-
     Object.defineProperty(item, 'location', o);
 
   };
@@ -395,7 +410,7 @@ function Adventure() {
   Item.prototype.serialize = function() {
     var item = this;
     var ret = JSON.stringify(this, function(k, v) {
-      if ((this === item) && (k in this.getImmutableProperties())) return; // don't serialize immutables
+      if ((typeof this.getImmutableProperties === 'function') && (k in this.getImmutableProperties())) return; // don't serialize immutables
       if (v === A) return; // don't serialize the adventure object
       if (k && v && (v.adventure === A)) { // serialize another Item/Place/Person as its id string  
         return serializationPrefix + '#' + v.id;
@@ -601,16 +616,6 @@ function Adventure() {
     return new Person(options)
   };
 
-  var exitReverseProperties = {
-    id: 'reverseId',
-    location: 'destination',
-    direction: 'reverseDirection',
-    isForwardExit: 'isReverseExit'
-  };
-  Object.keys(exitReverseProperties).forEach(function(k) {
-    exitReverseProperties[exitReverseProperties[k]] = k;
-  });
-
   function Exit(options) {
     if (typeof options === 'string') {
       options = {
@@ -623,62 +628,142 @@ function Adventure() {
     if (!('canBeTaken' in options)) {
       options.canBeTaken = immutable(false);
     }
+
     options.location = immutable(options.location);
     options.direction = immutable(options.direction);
     options.destination = immutable(options.destination);
 
-    var reverseDirection = unwrap(options.reverseDirection);
-    if (reverseDirection) {
-      options.reverseDirection = immutable(typeof reverseDirection === 'boolean' ? oppositeDirections[unwrap(options.direction)] :
-        options.reverseDirection);
+    var reverse = unwrap(options.reverse);
 
-      if (('reverseId' in options) && (unwrap(options.reverseid) in itemMap)) throw new Error('Cannot reuse id ' +
-        unwrap(options.reverseId) + ' for reverseId');
-      options.reverseId = immutable(options.reverseId || getNewId(name + '-reverse'));
-
-      // these are not touchable
-      options.isForwardExit = immutable(true);
-      options.isReverseExit = immutable(false);
-
-      options.forwardExit = immutable(this);
-
-      var proxyType = function() {};
-      proxyType.prototype = this;
-      var reverseExit = new proxyType();
-
-      options.reverseExit = immutable(reverseExit);
+    if (!reverse) {
+      Item.call(this, options);
+      return;
     }
+
+    delete options.reverse;
+
+    if (reverse === true) {
+      reverse = {};
+    } else if (typeof reverse == 'string') {
+      reverse = {
+        direction: reverse
+      };
+    }
+
+    reverse.direction = immutable(reverse.direction || oppositeDirections[unwrap(options.direction)]);
+
+    if (('id' in reverse) && (unwrap(reverse.id) in itemMap)) throw new Error('Cannot reuse id ' + unwrap(reverse.id) +
+      ' for reverse.id');
+
+    reverse.id = immutable(reverse.id || getNewId((unwrap(reverse.name) || name) + '-reverse'));
+
+    var reversePlural = ('plural' in reverse) ? unwrap(reverse.plural) : (('plural' in options) ? unwrap(options.plural) :
+      false);
+
+    if ('name' in reverse) {
+      reverse.name = immutable(reverse.name);
+      var defaultNames = getDefaultNames(unwrap(reverse.name), reversePlural);
+      reverse.keywords = immutable(reverse.keywords || defaultNames.keywords);
+      reverse.definiteName = immutable(reverse.definiteName || defaultNames.definiteName);
+      reverse.indefiniteName = immutable(reverse.indefiniteName || defaultNames.indefiniteName);
+      reverse.pluralName = immutable(reverse.pluralName || defaultNames.pluralName);
+      reverse.it = immutable(reverse.it || defaultNames.it);
+    }
+
+    ['description', 'keywords', 'plural', 'definiteName', 'indefiniteName', 'pluralName', 'it', 'canBeTaken', 'hidden',
+      'unlisted'
+    ].forEach(function(k) {
+      if (k in reverse) reverse[k] = immutable(reverse[k]);
+    });
+
+    // unchangable options
+    options.isForwardExit = immutable(true);
+    options.isReverseExit = immutable(false);
+    reverse.isForwardExit = immutable(false);
+    reverse.isReverseExit = immutable(true);
+    options.forwardExit = immutable(this);
+    var proxyType = function() {};
+    proxyType.prototype = this;
+    var reverseExit = new proxyType();
+
+    options.reverseExit = immutable(reverseExit);
+
+    if ('location' in reverse) throw new Error(
+      'Do not specify location of reverse exit; it will automatically be the same as the exit destination');
+    if ('destination' in reverse) throw new Error(
+      'Do not specify destination of reverse exit; it will automatically be the same as the exit location');
+
+    var immutableProperties = enforceItemPropertyImmutability(reverse, reverse);
 
     Item.call(this, options);
 
-    if (reverseDirection) {
+    var forwardExit = this;
+    reverseExit.serialize = this.serialize.bind(reverse);
+    reverseExit.deserialize = this.deserialize.bind(reverse);
+    reverse.getImmutableProperties = function() {
+      return immutableProperties;
+    };
 
-      var reverseExit = this.reverseExit;
-      var forwardExit = this;
+    Object.defineProperty(reverseExit, 'location', {
+      enumerable: true,
+      configurable: false,
+      get: function() {
+        return forwardExit.destination;
+      },
+      set: function(v) {
+        forwardExit.destination = v;
+      }
+    });
+    Object.defineProperty(reverseExit, 'destination', {
+      enumerable: true,
+      configurable: false,
+      get: function() {
+        return forwardExit.location;
+      },
+      set: function(v) {
+        forwardExit.location = v;
+      }
+    });
 
-      Object.keys(this).forEach(function(k) {
-        var rk = exitReverseProperties[k] || k;
-        var h = {
-          enumerable: true,
-          configurable: false,
-          get: function() {
-            return forwardExit[rk];
-          },
-          set: function(v) {
-            forwardExit[rk] = v;
-          }
+    var mergedKeyObj = {};
+    Object.keys(this).forEach(function(k) {
+      mergedKeyObj[k] = true;
+    });
+    Object.keys(reverse).forEach(function(k) {
+      mergedKeyObj[k] = true;
+    });
+
+    Object.keys(mergedKeyObj).forEach(function(k) {
+      if ((k == 'location') || (k == 'destination')) return;
+      if (typeof forwardExit[k] === 'function') return;
+      var get;
+      var set;
+      if (k in reverse) {
+        get = function() {
+          return reverse[k];
         };
-        Object.defineProperty(reverseExit, k, h);
+        set = function(v) {
+          reverse[k] = v;
+        };
+      } else {
+        get = function() {
+          return forwardExit[k];
+        }
+        set = function(v) {
+          forwardExit[k] = v;
+        };
+      }
+      Object.defineProperty(reverseExit, k, {
+        enumerable: true,
+        configurable: false,
+        get: get,
+        set: set
       });
+    });
 
-      reverseExit.serialize = function() {
-        return '';
-      };
-      reverseExit.deserialize = function() {};
-      Object.seal(reverseExit);
+    Object.seal(reverseExit);
 
-      itemMap[this.reverseId] = reverseExit;
-    }
+    itemMap[reverse.id] = reverseExit;
 
   }
   Exit.prototype = Object.create(Item.prototype);
@@ -752,7 +837,7 @@ function Adventure() {
 
   function getCommandMatches(subject, str) {
     str = str.replace(/[^a-z0-9 ]/ig, '').replace(/\s+/g, ' ').trim();
-    str = str.replace(/\bplease( |$)/g, '').trim(); // no need to be polite;
+    str = str.replace(/(\b|^)please( |$)/g, '').trim(); // no need to be polite;
     var argRe = /%[id]\d*/g;
     var allMatches = [];
     subject.commands().forEach(function(command) {

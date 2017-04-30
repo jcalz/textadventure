@@ -422,12 +422,12 @@
 
     var changingRoomDoor = adventure.newExit(Object.assign({}, openable, lockable, {
       id: 'changingRoomDoor',
-      name: 'changing room door',
+      name: 'door',
       keywords: ['door', 'exit', 'changing room door'],
       location: changingRoom,
       direction: 'south',
       destination: clothingStore,
-      reverseDirection: 'northwest',
+      reverse: {direction: 'northwest', name: 'changing room door', id: 'changingRoomDoorReverse', keywords: ['door', 'exit', 'changing room door']},
       open: false,
       unlocked: false
     }));

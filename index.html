@@ -391,7 +391,7 @@
       location: room,
       direction: 'north',
       destination: closet,
-      reverseDirection: true
+      reverse: true
     }));
 
     adventure.newExit(Object.assign({}, openableExitOptions, {
@@ -400,7 +400,7 @@
       location: room,
       direction: 'south',
       destination: bedroom,
-      reverseDirection: true
+      reverse: true
     }));
 
     var holeInTheWall = adventure.newExit({
@@ -411,7 +411,7 @@
       location: closet,
       direction: 'east',
       destination: tunnel,
-      reverseDirection: true,
+      reverse: true,
       hidden: true
     });
 
@@ -421,7 +421,7 @@
       keywords: ['ramp', 'exit'],
       direction: 'east',
       destination: pit,
-      reverseDirection: 'up'
+      reverse: 'up'
     });
 
     you.location = room;
