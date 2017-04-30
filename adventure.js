@@ -4,6 +4,9 @@
 //TODO "jump"
 //TODO "put ___ in/on ____"
 //TODO better name/pronoun grammar management
+//TODO 'known' should be property of subject, not items... maybe even 'hidden'?
+//TODO allow for multiple subjects 
+//TODO add timed events with some kind of 'tick' handler or some other system
 
 function Adventure() {
 
@@ -36,6 +39,8 @@ function Adventure() {
   }
   A.series = series;
 
+  
+  // mutability for options
   function MutabilityMarker(mutable, object) {
     this.mutable = mutable;
     this.object = object;
@@ -92,6 +97,7 @@ function Adventure() {
     return immutableProperties;
   }
 
+  // directions 
   var directions = {
     north: ['n', 'northern', 'northward', 'northwards'],
     south: ['s', 'southern', 'southward', 'southwards'],
@@ -127,9 +133,9 @@ function Adventure() {
     };
   });
 
+  // default names for an item given its name and plurality
   function getDefaultNames(name, plural) {
     var ret = {};
-
     if (plural) {
       ret.pluralName = name;
     } else if ((/[^aeiou]y$/i).test(name)) {
@@ -146,9 +152,99 @@ function Adventure() {
       'a ') + name;
     ret.it = plural ? 'they' : 'it';
     return ret;
-
   };
 
+  /*
+  function addS(word) {
+    if ((/[^aeiou]y$/i).test(word)) {
+      return word.substring(0, word.length - 1) + 'ies';
+    if ((/(s|x|z|ch|sh)$/i).test(word)) {
+      return word + 'es';
+    } 
+    return word+'s';  
+  };
+  
+  function makeName(nameOptions) {
+    if (typeof nameOptions === 'string') {
+        nameOptions = {name: nameOptions};
+    }
+
+    var nameObject = JSON.parse(JSON.stringify(nameOptions));
+
+    if (!('name' in nameObject)) {
+        throw new Error('need to specify a name parameter');
+    }
+    var name = nameObject.name;
+
+    if (!('isPlural' in nameObject)) nameObject.isPlural=false;
+    var isPlural = nameObject.isPlural;
+
+    if (!('gender' in nameObject)) nameObject.gender='n';
+    nameObject.gender = nameObject.gender.charAt(0).toLowerCase();
+    nameObject.toString = function(){return nameObject.name;};
+    
+    if (!('plural' in nameObject)) {
+        nameObject.plural = isPlural ? name : addS(name);
+    }
+    
+    if (!nameObject.definite) {
+       nameObject.definite = 'the ' + name;
+       }
+       
+    if (!nameObject.indefinite) {
+        nameObject.indefinite = isPlural ? name : ('aeiou'.indexOf(name.charAt(0).toLowerCase()) >=
+      0 ? 'an ' :
+      'a ') + name;
+    }
+    
+    if (!nameObject.she) {
+        nameObject.she = isPlural ? 'they' : (gender == 'm' ? 'he' : (gender == 'f' ? 'she' : 'it'));
+    }
+    nameObject.he = nameObject.she;
+    nameObject.it = name.she;
+    nameObject.they = name.she;
+    
+    if (!name.her) {
+        name.her = isPlural ? 'them' : (name.gender == 'm' ? 'him' : (name.gender == 'f' ? 'her' : 'it'));
+    }
+    name.him = name.her;
+    name.them = name.her;
+    
+    if (!name.his) {
+        name.his = isPlural ? 'their' : (name.gender == 'm' ? 'his' : (name.gender == 'f' ? 'her' : 'its'));
+    }
+    name.its = name.his;
+    name.their = name.his;
+    
+    if (!name.hers) {
+        name.hers = isPlural ? 'theirs' : (name.gender == 'm' ? 'his' : (name.gender == 'f' ? 'hers' : 'its'));
+    }
+    name.theirs = name.hers;
+    
+    if (!name.herself) {
+        name.herself = isPlural ? 'themselves' : (name.gender == 'm' ? 'himself' : (name.gender == 'f' ? 'herself' : 'itself'));
+    }
+    name.himself = name.herself;
+    name.itself = name.herself;
+    name.themselves = name.herself;
+    
+    if (!name.is) {
+        name.is = isPlural? 'are' : 'is';
+    }
+    name.are = name.is;
+    
+    if (!name.has) {
+        name.has = isPlural ? 'have' : 'has';
+    }
+    
+    if (!name.verb) {
+        name.verb = isPlural ? function(v){return v;} : function(v) {return v+'s';}
+    }
+    
+    return name;
+  };
+  */
+  
   // KEEP A MAP OF ALL ITEMS IN THE ADVENTURE
   var itemMap = {};
 
@@ -339,7 +435,7 @@ function Adventure() {
         ret += ' ' + capitalize(series(itemNames)) + ((items.length > 1 || items[0].plural) ? ' are' : ' is') +
           ' here.';
       } else {
-        ret += ' ' + capitalize(this.it) + ' contain' + (this.plural ? '' : 's') + ' ' + series(itemNames) + '.';
+        ret += ' ' + capitalize(this.it) + ' ' + ((this instanceof Person) ? (this.plural ? 'have' : 'has') : (this.plural ? 'contain' : 'contains')) + ' ' + series(itemNames) + '.';
       }
     }
     return ret;
@@ -1027,3 +1123,73 @@ function Adventure() {
   };
 
 };
+
+
+// some nice defaults?
+Adventure.openableExitOptions = {
+      open: true,
+      beOpenedBy: function(subject) {
+        if (this.open) return "It's already open.";
+        this.open = true;
+        return "You have opened " + this.getDistinguishingName() + ".";
+      },
+      beClosedBy: function(subject) {
+        if (!this.open) return "It's already closed.";
+        this.open = false;
+        return "You have closed " + this.getDistinguishingName() + ".";
+      },
+      beUsedBy: function(subject) {
+        if (!this.open) return adventure.capitalize(this.getDistinguishingName()) +
+          " is closed.";
+        return this.superMethod('beUsedBy')(subject);
+      },
+      beExaminedBy: function(subject) {
+        var description = this.superMethod('beExaminedBy')(subject);
+        return description + ' ' + adventure.capitalize(this.it) + ' is ' + (this.open ? 'open' : 'closed') + '.';
+      },
+      beUnlockedBy: function(subject) {
+        return "There's no lock.";
+      },
+      beLockedBy: function(subject) {
+        return "It doesn't lock.";
+      },
+      bePulledBy: function(subject) {
+        return (this.isForwardExit) ? this.beOpenedBy(subject) : this.beClosedBy(subject);
+      },
+      bePushedBy: function(subject) {
+         return (this.isReverseExit) ? this.beOpenedBy(subject) : this.beClosedBy(subject);
+      }
+    };
+
+Adventure.lockableExitOptions = {
+      unlocked: true,
+      beOpenedBy: function(subject) {
+        if (this.unlocked) return Adventure.openableExitOptions.beOpenedBy.call(this, subject);
+        return adventure.capitalize(this.getDistinguishingName()) + " is locked.";
+      },
+      beUsedBy: function(subject) {
+        if (!this.unlocked) return adventure.capitalize(this.getDistinguishingName()) +
+          " is locked.";
+        return Adventure.openableExitOptions.beUsedBy.call(this, subject);
+      },
+      beExaminedBy: function(subject) {
+        var ret = this.superMethod('beExaminedBy')(subject);
+        ret += ' ' + adventure.capitalize(this.it) + ' is ' + (this.open ? 'open' : ('closed and ' + (this.unlocked ?
+          'un' : ''))) + 'locked.';
+        ret += ' ' + adventure.capitalize(this.it) + ' ' + (this.unlocked ? '' : 'un') + 'locks from '+(this.isForwardExit ? 'this' : 'the other') + ' side.';
+        return ret;
+      },
+      beUnlockedBy: function(subject) {
+        if (this.unlocked) return "It's already unlocked.";
+        if (this.isReverseExit) return "You can't unlock it from this side.";
+        this.unlocked = true;
+        return "You have unlocked " + this.definiteName + '.';
+      },
+      beLockedBy: function(subject) {
+        if (this.open) return "You have to close it first.";
+        if (!this.unlocked) return "It's already locked.";
+        if (this.isReverseExit) return "You can't lock it from this side.";
+        this.unlocked = false;
+        return "You have locked " + this.definiteName + '.';
+      }
+    };

@@ -305,6 +305,8 @@
     var you = adventure.newPerson({
       id: 'you',
       name: 'you',
+      plural: true,
+      it: 'you',
       keywords: ['me', 'myself', 'i'],
       known: true,
       unlisted: adventure.immutable(true)
@@ -355,72 +357,7 @@
       keywords: ['clothing store', 'store', 'clothes store', 'room']
     });
 
-    // EXITS
-    var openable = {
-      open: true,
-      beOpenedBy: function(subject) {
-        if (this.open) return "It's already open.";
-        this.open = true;
-        return "You have opened " + this.getDistinguishingName() + ".";
-      },
-      beClosedBy: function(subject) {
-        if (!this.open) return "It's already closed.";
-        this.open = false;
-        return "You have closed " + this.getDistinguishingName() + ".";
-      },
-      beUsedBy: function(subject) {
-        if (!this.open) return adventure.capitalize(this.getDistinguishingName()) +
-          " is closed.";
-        return this.superMethod('beUsedBy')(subject);
-      },
-      beExaminedBy: function(subject) {
-        var description = this.superMethod('beExaminedBy')(subject);
-        return description + ' ' + adventure.capitalize(this.it) + ' is ' + (this.open ? 'open' : 'closed') + '.';
-      },
-      beUnlockedBy: function(subject) {
-        return "There's no lock.";
-      },
-      beLockedBy: function(subject) {
-        return "It doesn't lock.";
-      }
-    };
-
-    // lockable from the front
-    var lockable = {
-      unlocked: true,
-      beOpenedBy: function(subject) {
-        if (this.unlocked) return openable.beOpenedBy.call(this, subject);
-        return adventure.capitalize(this.getDistinguishingName()) + " is locked.";
-      },
-      beUsedBy: function(subject) {
-        if (!this.unlocked) return adventure.capitalize(this.getDistinguishingName()) +
-          " is locked.";
-        return openable.beUsedBy.call(this, subject);
-      },
-      beExaminedBy: function(subject) {
-        var ret = this.superMethod('beExaminedBy')(subject);
-        ret += ' ' + adventure.capitalize(this.it) + ' is ' + (this.open ? 'open' : ('closed and ' + (this.unlocked ?
-          'unlocked' : 'locked'))) + '.';
-        ret += ' The slide lock is on ' + (this.isForwardExit ? 'this' : 'the other') + ' side of ' + this.definiteName +
-          '.';
-        return ret;
-      },
-      beUnlockedBy: function(subject) {
-        if (this.unlocked) return "It's already unlocked.";
-        if (this.isReverseExit) return "You can't unlock it from this side.";
-        this.unlocked = true;
-        return "You have unlocked " + this.definiteName + '.';
-      },
-      beLockedBy: function(subject) {
-        if (this.open) return "You have to close it first.";
-        if (!this.unlocked) return "It's already locked.";
-        if (this.isReverseExit) return "You can't lock it from this side.";
-        this.unlocked = false;
-        return "You have locked " + this.definiteName + '.';
-      }
-    };
-
-    var changingRoomDoor = adventure.newExit(Object.assign({}, openable, lockable, {
+    var changingRoomDoor = adventure.newExit(Object.assign({}, Adventure.openableExitOptions, Adventure.lockableExitOptions, {
       id: 'changingRoomDoor',
       name: 'door',
       keywords: ['door', 'exit', 'changing room door'],

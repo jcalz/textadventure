@@ -308,6 +308,8 @@
     you.keywords = ['me', 'myself', 'I'];
     you.known = true;
     you.unlisted = true;
+    you.plural = true; // I think this works for second person
+    you.it = 'you'; 
     you = adventure.newPerson(you);
 
     // silly template language: 
@@ -361,31 +363,7 @@
     });
 
     // EXITS
-
-    var openableExitOptions = {
-      open: true,
-      beOpenedBy: function(subject) {
-        if (this.open) return "It's already open.";
-        this.open = true;
-        return "You have opened " + this.getDistinguishingName() + ".";
-      },
-      beClosedBy: function(subject) {
-        if (!this.open) return "It's already closed.";
-        this.open = false;
-        return "You have closed " + this.getDistinguishingName() + ".";
-      },
-      beUsedBy: function(subject) {
-        if (!this.open) return adventure.capitalize(this.getDistinguishingName()) +
-          " is closed.";
-        return this.superMethod('beUsedBy')(subject);
-      },
-      beExaminedBy: function(subject) {
-        var description = this.superMethod('beExaminedBy')(subject);
-        return description + ' ' + adventure.capitalize(this.it) + ' is ' + (this.open ? 'open' : 'closed') + '.';
-      }
-    };
-
-    adventure.newExit(Object.assign({}, openableExitOptions, {
+    adventure.newExit(Object.assign({}, Adventure.openableExitOptions, {
       name: 'door',
       keywords: ['door', 'exit'],
       location: room,
@@ -394,12 +372,12 @@
       reverse: true
     }));
 
-    adventure.newExit(Object.assign({}, openableExitOptions, {
+    adventure.newExit(Object.assign({}, Adventure.openableExitOptions, {
       name: 'door',
       keywords: ['door', 'exit'],
-      location: room,
-      direction: 'south',
-      destination: bedroom,
+      location: bedroom,
+      direction: 'north',
+      destination: room,
       reverse: true
     }));
 
