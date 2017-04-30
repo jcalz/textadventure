@@ -2,7 +2,7 @@
 //TODO limit to inventory?
 //TODO maybe ambiguous items should be a warning error rather than first-found?
 //TODO "jump"
-//TODO "put ___ in/on ____"
+//TODO "put ___ on ____"?
 //TODO better name/pronoun grammar management
 //TODO 'known' should be property of subject, not items... maybe even 'hidden'?
 //TODO allow for multiple subjects 
@@ -608,7 +608,7 @@ function Adventure() {
         }
         if (!(objectCommandName in object)) {
           // okay let's use the first template
-          var commandName = templates[0].split(/\s+/)[0].toLowerCase();
+          var commandName = templates[0].toLowerCase().replace(/%[id]1?[^0-9]*$/,'').trim().replace(/%[id]\d+/,'anything');
           return "You can't " + commandName + " " + object.definiteName + ".";
         }
         var args = Array.from(arguments);

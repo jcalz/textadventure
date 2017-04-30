@@ -327,7 +327,8 @@
     you.addCommand('move', 'beMovedBy', ['move %i1']);
     you.addCommand('push', 'bePushedBy', ['push %i1', 'shove %i1', 'press %i1', 'push on %i1', 'press on %i1']);
     you.addCommand('pull', 'bePulledBy', ['pull %i1', 'tug %i1', 'yank %i1', 'pull on %i1', 'tug on %i1', 'yank on %i1']);
-
+    you.addCommand('putInto', 'bePutIntoBy', ['put %i2 into %i1','put %i2 in %i1','put %i2 inside %i1','place %i2 into %i1','place %i2 in %i1','place %i2 inside %i1']);
+    
     // PLACES
     var room = {
       id: 'room'
@@ -627,6 +628,13 @@
       cabinet.locked = false;
       return "You turn the key in the cabinet's lock until you hear a click.  The cabinet springs open!";
     }
+    cabinet.bePutIntoBy = function(subject, item) {
+        if (!subject.has(item)) {
+            return "You don't have "+item.definiteName+".";
+        }        
+        item.location = this;
+        return "You have put "+item.definiteName+" in "+this.definiteName+".";
+    };
     cabinet.location = bedroom;
     cabinet = adventure.newItem(cabinet);
 
