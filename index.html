@@ -307,7 +307,7 @@
     you.name = 'you';
     you.keywords = ['me', 'myself', 'I'];
     you.known = true;
-    you.unlisted = adventure.immutable(true);
+    you.unlisted = true;
     you = adventure.newPerson(you);
 
     // silly template language: 
@@ -443,9 +443,9 @@
       }
       return subject.open(object, this);
     };
-    canOpener = adventure.newItem(canOpener);
     canOpener.location = tunnel;
-
+    canOpener = adventure.newItem(canOpener);
+    
     var soup = {
       id: 'can of soup'
     }
@@ -518,9 +518,9 @@
       }
       return "You can't eat it; the can is empty.";
     };
-    soup = adventure.newItem(soup);
     soup.location = closet;
-
+    soup = adventure.newItem(soup);
+   
     var note = {
       'id': 'note'
     };
@@ -558,9 +558,9 @@
     bed.beUsedBy = function(subject) {
       return "You lie down on the bed and fall asleep for a few minutes.  You wake up feeling refreshed.";
     };
-    bed = adventure.newItem(bed);
     bed.location = bedroom;
-
+    bed = adventure.newItem(bed);
+    
     bedroom.newBackgroundItem({
       name: 'pillows',
       plural: true,
@@ -589,8 +589,8 @@
       }
       return ret;
     }
-    teddyBear = adventure.newItem(teddyBear);
     teddyBear.location = bedroom;
+    teddyBear = adventure.newItem(teddyBear);
 
     var key = {
       id: 'key'
@@ -607,8 +607,8 @@
       }
       return "You try to use the key on " + object.definiteName + " but it doesn't do anything.";
     }
-    key = adventure.newItem(key);
     key.location = teddyBear;
+    key = adventure.newItem(key);
 
     var cabinet = {
       id: 'cabinet'
@@ -649,8 +649,8 @@
       cabinet.locked = false;
       return "You turn the key in the cabinet's lock until you hear a click.  The cabinet springs open!";
     }
-    cabinet = adventure.newItem(cabinet);
     cabinet.location = bedroom;
+    cabinet = adventure.newItem(cabinet);
 
     var diary = {
       id: 'diary'
@@ -667,8 +667,8 @@
         " I don't think my friend's parents like me very much. But they seemed very excited " +
         "when I told them I was rich.\"";
     }
-    diary = adventure.newItem(diary);
     diary.location = cabinet;
+    diary = adventure.newItem(diary);
 
     var boulder = {
       id: 'boulder'
@@ -696,8 +696,8 @@
     }
     boulder.bePushedBy = boulder.beMovedBy;
     boulder.bePulledBy = boulder.beMovedBy;
-    boulder = adventure.newItem(boulder);
     boulder.location = closet;
+    boulder = adventure.newItem(boulder);
 
     /*
     var magicEye = adventure.newItem("magic eye");

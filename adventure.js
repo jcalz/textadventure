@@ -1,9 +1,9 @@
 "use strict";
-
 //TODO limit to inventory?
 //TODO maybe ambiguous items should be a warning error rather than first-found?
 //TODO "jump"
 //TODO "put ___ in/on ____"
+//TODO better name/pronoun grammar management
 
 function Adventure() {
 
@@ -233,9 +233,9 @@ function Adventure() {
     options.pluralName = immutable(options.pluralName || defaultNames.pluralName);
     options.it = immutable(options.it || defaultNames.it);
     options.canBeTaken = immutable('canBeTaken' in options ? options.canBeTaken : true);
-    options.location = mutable(options.location || null);
+    options.location = (unwrap(options.canBeTaken) ? mutable : immutable)(options.location || null);
     options.hidden = 'hidden' in options ? mutable(options.hidden) : immutable(false);
-    options.unlisted = 'unlisted' in options ? mutable(options.unlisted) : immutable(false);
+    options.unlisted = immutable('unlisted' in options ? options.unlisted : false);
     options.known = mutable('known' in options ? options.known : false);
 
     var location = options.location;
@@ -499,6 +499,7 @@ function Adventure() {
     if (!('canBeTaken' in options)) {
       options.canBeTaken = immutable(false);
     }
+    options.location = mutable(options.location); // people default to mobile
     if (!('it' in options)) {
       options.it = immutable('she');
     }
@@ -631,13 +632,40 @@ function Adventure() {
 
     options.location = immutable(options.location);
     options.direction = immutable(options.direction);
-    options.destination = immutable(options.destination);
-
+    
+    // destination should be managed as a getter/setter that takes objects or ids, like location
+    var destination = immutable(options.destination);
+    delete options.destination;
+    var destinationImmutable = !(destination.mutable);
+    destination = unwrap(destination);
+    var o = {
+      configurable: false,
+      enumerable: true,
+      get: function() {
+        var ret = destination;
+        if (typeof destination === 'string') ret = itemMap[destination];
+        if (!ret) ret = null;
+        return ret;
+      }
+    };
+    if (!destinationImmutable) {
+      o.set = function(l) {
+        destination = l;
+      };
+    }
+    Object.defineProperty(this, 'destination', o);
+    
     var reverse = unwrap(options.reverse);
-
+    
+    var exit = this;
+    function makeThisAnItem() {
+        Item.call(exit, options);
+        if (destinationImmutable) exit.getImmutableProperties().destination = true;
+    }
+    
     if (!reverse) {
-      Item.call(this, options);
-      return;
+        makeThisAnItem();
+        return;
     }
 
     delete options.reverse;
@@ -682,6 +710,7 @@ function Adventure() {
     reverse.isForwardExit = immutable(false);
     reverse.isReverseExit = immutable(true);
     options.forwardExit = immutable(this);
+
     var proxyType = function() {};
     proxyType.prototype = this;
     var reverseExit = new proxyType();
@@ -694,12 +723,15 @@ function Adventure() {
       'Do not specify destination of reverse exit; it will automatically be the same as the exit location');
 
     var immutableProperties = enforceItemPropertyImmutability(reverse, reverse);
+    // as of now, reverse is an object holding onto these properties
 
-    Item.call(this, options);
+    makeThisAnItem();
+    
+    itemMap[reverse.id] = reverseExit;
 
     var forwardExit = this;
-    reverseExit.serialize = this.serialize.bind(reverse);
-    reverseExit.deserialize = this.deserialize.bind(reverse);
+    reverse.serialize = this.serialize.bind(reverse);
+    reverse.deserialize = this.deserialize.bind(reverse);
     reverse.getImmutableProperties = function() {
       return immutableProperties;
     };
@@ -735,7 +767,6 @@ function Adventure() {
 
     Object.keys(mergedKeyObj).forEach(function(k) {
       if ((k == 'location') || (k == 'destination')) return;
-      if (typeof forwardExit[k] === 'function') return;
       var get;
       var set;
       if (k in reverse) {
@@ -748,11 +779,12 @@ function Adventure() {
       } else {
         get = function() {
           return forwardExit[k];
-        }
+        };
         set = function(v) {
           forwardExit[k] = v;
         };
       }
+
       Object.defineProperty(reverseExit, k, {
         enumerable: true,
         configurable: false,
@@ -763,7 +795,6 @@ function Adventure() {
 
     Object.seal(reverseExit);
 
-    itemMap[reverse.id] = reverseExit;
 
   }
   Exit.prototype = Object.create(Item.prototype);
