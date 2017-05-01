@@ -240,7 +240,7 @@
       return date.toString();
     };
 
-    var gameVersion = '-thegame-v0.0.1';
+    var gameVersion = '-thegame-v0.0.2';
     var autosaveKey = 'autosave' + gameVersion;
 
     $(function() {
@@ -300,7 +300,8 @@
     });
 
     ///////////// SPECIFIC STUFF /////////////////
-    var adventure = new Adventure();
+    var A = Adventure;
+    var adventure = A.newAdventure();
 
     var you = {};
     you.id = 'you';
@@ -450,7 +451,7 @@
         return "You don't have " + this.definiteName + ".";
       }
       if (!this.closed) {
-        return adventure.capitalize(this.definiteName) + " has already been opened.";
+        return A.capitalize(this.definiteName) + " has already been opened.";
       }
       if (!instrument) {
         return "You try to rip the soup can open with your bare hands, but you can't.";
@@ -607,7 +608,7 @@
         if (items.length == 0) {
           ret += 'and empty.';
         } else {
-          ret += 'and contains ' + adventure.series(items) + ".";
+          ret += 'and contains ' + A.series(items) + ".";
         }
       }
       return ret;

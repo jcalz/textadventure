@@ -240,7 +240,7 @@
       return date.toString();
     };
 
-    var gameVersion = '-theMall-v0.0.1';
+    var gameVersion = '-theMall-v0.0.2';
     var autosaveKey = 'autosave' + gameVersion;
 
     $(function() {
@@ -300,7 +300,8 @@
     });
 
     ///////////// SPECIFIC STUFF /////////////////
-    var adventure = new Adventure();
+    var A = Adventure;
+    var adventure = A.newAdventure();
 
     var you = adventure.newPerson({
       id: 'you',
@@ -309,7 +310,7 @@
       it: 'you',
       keywords: ['me', 'myself', 'i'],
       known: true,
-      unlisted: adventure.immutable(true)
+      unlisted: A.immutable(true)
     });
 
     // silly template language: 
