@@ -486,6 +486,13 @@ var Adventure = (function() {
     a.newItem = function(options) {
       return new Item(options)
     };
+    
+    var addMethodFactory = function(typeName, constructor){return function(name,method){
+        if (name in constructor.prototype) throw new Error (typeName+" prototype already has a property named \""+name+"\".");
+        constructor.prototype[name]=method;
+    };};
+    
+    a.addItemMethod = addMethodFactory('Item',Item);
 
     function Place(options) {
       if (typeof options === 'string') {
@@ -510,6 +517,7 @@ var Adventure = (function() {
     a.newPlace = function(options) {
       return new Place(options)
     };
+    a.addPlaceMethod = addMethodFactory('Place',Place);
 
     function Person(options) {
       if (typeof options === 'string') {
@@ -649,6 +657,8 @@ var Adventure = (function() {
     a.newPerson = function(options) {
       return new Person(options)
     };
+    a.addPersonMethod = addMethodFactory('Person',Person);
+
 
     function Exit(options) {
       if (typeof options === 'string') {
@@ -861,7 +871,9 @@ var Adventure = (function() {
     a.newExit = function(options) {
       return new Exit(options);
     };
+    a.addExitMethod = addMethodFactory('Exit',Exit);
 
+    
     var noExit = {};
     Object.keys(directions).forEach(function(k) {
       noExit[k] = new Exit({

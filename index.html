@@ -342,7 +342,8 @@
       }
       return "You have put " + item.definiteName + " in " + this.definiteName + ".";
     };
-
+    adventure.addPlaceMethod('bePutIntoBy',genericBePutIntoBy);
+    
     // PLACES
     var room = {
       id: 'room'
@@ -733,11 +734,6 @@
     }        
     */
 
-    adventure.allItems().filter(function(it) {
-      return it.isPlace;
-    }).forEach(function(it) {
-      it.bePutIntoBy = genericBePutIntoBy;
-    });
 
     var initialState = adventure.serialize();
     var previouslySavedState = hasLocalStorage && localStorage.getItem(autosaveKey);
