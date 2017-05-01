@@ -1081,13 +1081,13 @@ var Adventure = (function() {
       return "You have closed " + this.getDistinguishingName() + ".";
     },
     beUsedBy: function(subject) {
-      if (!this.open) return adventure.capitalize(this.getDistinguishingName()) +
+      if (!this.open) return Adv.capitalize(this.getDistinguishingName()) +
         " is closed.";
       return this.superMethod('beUsedBy')(subject);
     },
     beExaminedBy: function(subject) {
       var description = this.superMethod('beExaminedBy')(subject);
-      return description + ' ' + adventure.capitalize(this.it) + ' is ' + (this.open ? 'open' : 'closed') + '.';
+      return description + ' ' + Adv.capitalize(this.it) + ' is ' + (this.open ? 'open' : 'closed') + '.';
     },
     beUnlockedBy: function(subject) {
       return "There's no lock.";
@@ -1106,19 +1106,19 @@ var Adventure = (function() {
   Adv.lockableExitOptions = {
     unlocked: true,
     beOpenedBy: function(subject) {
-      if (this.unlocked) return Adventure.openableExitOptions.beOpenedBy.call(this, subject);
-      return adventure.capitalize(this.getDistinguishingName()) + " is locked.";
+      if (this.unlocked) return Adv.openableExitOptions.beOpenedBy.call(this, subject);
+      return Adv.capitalize(this.getDistinguishingName()) + " is locked.";
     },
     beUsedBy: function(subject) {
-      if (!this.unlocked) return adventure.capitalize(this.getDistinguishingName()) +
+      if (!this.unlocked) return Adv.capitalize(this.getDistinguishingName()) +
         " is locked.";
-      return Adventure.openableExitOptions.beUsedBy.call(this, subject);
+      return Adv.openableExitOptions.beUsedBy.call(this, subject);
     },
     beExaminedBy: function(subject) {
       var ret = this.superMethod('beExaminedBy')(subject);
-      ret += ' ' + adventure.capitalize(this.it) + ' is ' + (this.open ? 'open' : ('closed and ' + (this.unlocked ?
+      ret += ' ' + Adv.capitalize(this.it) + ' is ' + (this.open ? 'open' : ('closed and ' + (this.unlocked ?
         'un' : ''))) + 'locked.';
-      ret += ' ' + adventure.capitalize(this.it) + ' ' + (this.unlocked ? '' : 'un') + 'locks from ' + (this.isForwardExit ?
+      ret += ' ' + Adv.capitalize(this.it) + ' ' + (this.unlocked ? '' : 'un') + 'locks from ' + (this.isForwardExit ?
         'this' : 'the other') + ' side.';
       return ret;
     },
