@@ -310,7 +310,7 @@
     you.known = true;
     you.unlisted = true;
     you.plural = true; // I think this works for second person
-    you.it = 'you'; 
+    you.it = 'you';
     you = adventure.newPerson(you);
 
     // silly template language: 
@@ -328,8 +328,21 @@
     you.addCommand('move', 'beMovedBy', ['move %i1']);
     you.addCommand('push', 'bePushedBy', ['push %i1', 'shove %i1', 'press %i1', 'push on %i1', 'press on %i1']);
     you.addCommand('pull', 'bePulledBy', ['pull %i1', 'tug %i1', 'yank %i1', 'pull on %i1', 'tug on %i1', 'yank on %i1']);
-    you.addCommand('putInto', 'bePutIntoBy', ['put %i2 into %i1','put %i2 in %i1','put %i2 inside %i1','place %i2 into %i1','place %i2 in %i1','place %i2 inside %i1']);
-    
+    you.addCommand('putInto', 'bePutIntoBy', ['put %i2 into %i1', 'put %i2 in %i1', 'put %i2 inside %i1',
+      'place %i2 into %i1', 'place %i2 in %i1', 'place %i2 inside %i1'
+    ]);
+
+    var genericBePutIntoBy = function(subject, item) {
+      if (!subject.has(item)) {
+        return "You don't have " + item.definiteName + ".";
+      }
+      item.location = this;
+      if (subject.location == this) {
+        return "You have dropped " + item.definiteName + ".";
+      }
+      return "You have put " + item.definiteName + " in " + this.definiteName + ".";
+    };
+
     // PLACES
     var room = {
       id: 'room'
@@ -425,7 +438,7 @@
     };
     canOpener.location = tunnel;
     canOpener = adventure.newItem(canOpener);
-    
+
     var soup = {
       id: 'can of soup'
     }
@@ -500,7 +513,7 @@
     };
     soup.location = closet;
     soup = adventure.newItem(soup);
-   
+
     var note = {
       'id': 'note'
     };
@@ -540,7 +553,7 @@
     };
     bed.location = bedroom;
     bed = adventure.newItem(bed);
-    
+
     bedroom.newBackgroundItem({
       name: 'pillows',
       plural: true,
@@ -580,10 +593,12 @@
       if (!object) {
         return "I don't know how you want to use the key.  Try using it on something.";
       }
-      if (object === cabinet)
-        return subject.unlock(object, this);
       if (!subject.canSee(object)) {
         return "You can't see " + object.definiteName + ".";
+      }
+      if (object === cabinet) {
+        if (cabinet.locked) return subject.unlock(object, this);
+        return "The cabinet is already unlocked.";
       }
       return "You try to use the key on " + object.definiteName + " but it doesn't do anything.";
     }
@@ -594,12 +609,13 @@
       id: 'cabinet'
     };
     cabinet.keywords = ['cabinet'];
+    cabinet.closed = true;
     cabinet.locked = true;
     cabinet.canBeTaken = false;
     cabinet.beExaminedBy = function(subject) {
       var ret = 'The cabinet is made out of wood.';
-      if (cabinet.locked) {
-        ret += ' It is closed and locked.';
+      if (cabinet.closed) {
+        ret += ' It is closed and ' + (cabinet.locked ? '' : 'un') + 'locked.';
       } else {
         ret += ' It is open ';
         var items = cabinet.listContents().map(function(it) {
@@ -614,28 +630,46 @@
       return ret;
     };
     cabinet.beOpenedBy = cabinet.beUnlockedBy = cabinet.bePulledBy = function(subject, instrument) {
-      if (!cabinet.locked) {
+      if (!cabinet.closed) {
         return "The cabinet is already open.";
       }
+      if (!cabinet.locked) {
+        cabinet.closed = false;
+        cabinet.allContents().forEach(function(it) {
+          it.hidden = false;
+        });
+        return "You open the cabinet.";
+      }
       if (!instrument) {
-        return "You try to open the cabinet but it remains locked.";
+        return "You try to open the cabinet but it is locked.";
       }
       if (!subject.has(instrument)) {
         return "You don't have " + instrument.definiteName + ".";
       }
       if (instrument !== key) {
-        return "You try to open the cabinet with " + instrument.definiteName + " but it remains locked.";
+        return "You try to unlock the cabinet with " + instrument.definiteName + " but it remains locked.";
       }
       cabinet.locked = false;
+      cabinet.closed = false;
+      cabinet.allContents().forEach(function(it) {
+        it.hidden = false;
+      });
       return "You turn the key in the cabinet's lock until you hear a click.  The cabinet springs open!";
     }
-    cabinet.bePutIntoBy = function(subject, item) {
-        if (!subject.has(item)) {
-            return "You don't have "+item.definiteName+".";
-        }        
-        item.location = this;
-        return "You have put "+item.definiteName+" in "+this.definiteName+".";
+    cabinet.beClosedBy = function(subject) {
+      if (cabinet.closed) {
+        return "The cabinet is already closed.";
+      }
+      cabinet.closed = true;
+      cabinet.allContents().forEach(function(it) {
+        it.hidden = true;
+      });
+      return "You have closed the cabinet.";
     };
+    cabinet.bePutIntoBy = function(subject, item) {
+      if (cabinet.closed) return "You can't do that.  The cabinet is closed.";
+      return genericBePutIntoBy.call(this, subject, item);
+    }
     cabinet.location = bedroom;
     cabinet = adventure.newItem(cabinet);
 
@@ -655,6 +689,7 @@
         "when I told them I was rich.\"";
     }
     diary.location = cabinet;
+    diary.hidden = true;
     diary = adventure.newItem(diary);
 
     var boulder = {
@@ -697,6 +732,12 @@
       return this.superMethod('beExaminedBy')(subject);
     }        
     */
+
+    adventure.allItems().filter(function(it) {
+      return it.isPlace;
+    }).forEach(function(it) {
+      it.bePutIntoBy = genericBePutIntoBy;
+    });
 
     var initialState = adventure.serialize();
     var previouslySavedState = hasLocalStorage && localStorage.getItem(autosaveKey);

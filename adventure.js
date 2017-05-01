@@ -247,7 +247,7 @@ var Adventure = (function() {
       options.it = immutable(options.it || defaultNames.it);
       options.canBeTaken = immutable('canBeTaken' in options ? options.canBeTaken : true);
       options.location = (unwrap(options.canBeTaken) ? mutable : immutable)(options.location || null);
-      options.hidden = 'hidden' in options ? mutable(options.hidden) : immutable(false);
+      options.hidden = 'hidden' in options ? mutable(options.hidden) : mutable(false);
       options.unlisted = immutable('unlisted' in options ? options.unlisted : false);
       options.known = mutable('known' in options ? options.known : false);
       options.isItem = immutable(true);
@@ -361,6 +361,13 @@ var Adventure = (function() {
       return ret;
     };
 
+    Item.prototype.allContents = function() {
+      var here = this;
+      return allItems().filter(function(it) {
+        return it.location === here;
+      });
+    };
+
     Item.prototype.listContents = function() {
       var here = this;
       var items = allItems().filter(function(it) {
@@ -467,6 +474,8 @@ var Adventure = (function() {
       options = options || {};
       if (!('unlisted' in options))
         options.unlisted = immutable(true);
+      if (!('hidden' in options))
+        options.hidden = immutable(false);
       if (!('canBeTaken' in options))
         options.canBeTaken = immutable(false);
       if (!('location' in options))
@@ -489,6 +498,9 @@ var Adventure = (function() {
       options.name = immutable(options.name || name);
       if (!('canBeTaken' in options)) {
         options.canBeTaken = immutable(false);
+      }
+      if (!('hidden' in options)) {
+        options.hidden = immutable(false);
       }
       options.location = immutable(options.location);
       options.isPlace = immutable(true);
@@ -649,6 +661,9 @@ var Adventure = (function() {
       options.name = immutable(options.name || name);
       if (!('canBeTaken' in options)) {
         options.canBeTaken = immutable(false);
+      }
+      if (!('hidden' in options)) {
+        options.hidden = immutable(false);
       }
 
       options.location = immutable(options.location);
@@ -858,7 +873,8 @@ var Adventure = (function() {
         location: null,
         destination: null,
         noExit: immutable(true),
-        known: immutable(false)
+        known: immutable(false),
+        hidden: immutable(true)
       });
     });
 
