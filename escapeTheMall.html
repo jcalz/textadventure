@@ -303,6 +303,22 @@
     var A = Adventure;
     var adventure = A.newAdventure();
 
+     // silly template language: 
+    // "use %i1" means "use" followed by an ITEM, to be passed as FIRST parameter to the function.
+    // "give %i1 to %i2", means "give"
+    // "go %d1" // d means DIRECTION
+    adventure.addCommand('read', 'beReadBy', ['read %i1'], 'Read something.');
+    adventure.addCommand('eat', 'beEatenBy', ['eat %i1']);
+    adventure.addCommand('open', 'beOpenedBy', ['open %i1', 'open %i1 with %i2', 'use %i2 to open %i1', 'open %i1 using %i2']);
+    adventure.addCommand('close', 'beClosedBy', ['close %i1', 'shut %i1']);
+    adventure.addCommand('unlock', 'beUnlockedBy', ['unlock %i1', 'unlock %i1 with %i2', 'use %i2 to unlock %i1',
+      'unlock %i1 using %i2'
+    ]);
+    adventure.addCommand('lock', 'beLockedBy', ['lock %i1', 'lock %i1 with %i2', 'use %i2 to lock %i1', 'lock %i1 using %i2']);
+    adventure.addCommand('move', 'beMovedBy', ['move %i1']);
+    adventure.addCommand('push', 'bePushedBy', ['push %i1', 'shove %i1', 'press %i1', 'push on %i1', 'press on %i1']);
+    adventure.addCommand('pull', 'bePulledBy', ['pull %i1', 'tug %i1', 'yank %i1', 'pull on %i1', 'tug on %i1', 'yank on %i1']);
+    
     var you = adventure.newPerson({
       id: 'you',
       name: 'you',
@@ -312,23 +328,7 @@
       known: true,
       unlisted: A.immutable(true)
     });
-
-    // silly template language: 
-    // "use %i1" means "use" followed by an ITEM, to be passed as FIRST parameter to the function.
-    // "give %i1 to %i2", means "give"
-    // "go %d1" // d means DIRECTION
-    you.addCommand('read', 'beReadBy', ['read %i1'], 'Read something.');
-    you.addCommand('eat', 'beEatenBy', ['eat %i1']);
-    you.addCommand('open', 'beOpenedBy', ['open %i1', 'open %i1 with %i2', 'use %i2 to open %i1', 'open %i1 using %i2']);
-    you.addCommand('close', 'beClosedBy', ['close %i1', 'shut %i1']);
-    you.addCommand('unlock', 'beUnlockedBy', ['unlock %i1', 'unlock %i1 with %i2', 'use %i2 to unlock %i1',
-      'unlock %i1 using %i2'
-    ]);
-    you.addCommand('lock', 'beLockedBy', ['lock %i1', 'lock %i1 with %i2', 'use %i2 to lock %i1', 'lock %i1 using %i2']);
-    you.addCommand('move', 'beMovedBy', ['move %i1']);
-    you.addCommand('push', 'bePushedBy', ['push %i1', 'shove %i1', 'press %i1', 'push on %i1', 'press on %i1']);
-    you.addCommand('pull', 'bePulledBy', ['pull %i1', 'tug %i1', 'yank %i1', 'pull on %i1', 'tug on %i1', 'yank on %i1']);
-
+   
     var started = false;
     you.start = function() {
       var ret = "";

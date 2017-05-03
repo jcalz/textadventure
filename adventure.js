@@ -561,7 +561,7 @@ var Adventure = (function() {
     };
     a.addPersonMethod = addMethodFactory('Person', Person);
 
-    Person.prototype.addCommand = function(subjectCommandName, objectCommandName, templates, help, helpOrder) {
+    a.addCommand = function(subjectCommandName, objectCommandName, templates, help, helpOrder) {
       var command = function command(object) {
         if (!this.canSee(object)) {
           return "You can't see " + object.definiteName + " here.";
@@ -581,14 +581,14 @@ var Adventure = (function() {
         command.help = help;
       }
       if (typeof helpOrder === 'undefined') {
-        helpOrder = Math.max.apply(null, this.commands().map(function(c) {
+        helpOrder = Math.max.apply(null, Person.prototype.commands().map(function(c) {
           return c.helpOrder;
         }).filter(function(o) {
           return typeof o == 'number';
         })) + 1;
       }
       command.helpOrder = helpOrder;
-      this[subjectCommandName] = command;
+      Person.prototype[subjectCommandName] = command;
     };
 
     var go = function(exit) {
@@ -620,12 +620,12 @@ var Adventure = (function() {
     look.helpOrder = 1;
     Person.prototype.look = look;
 
-    Person.prototype.addCommand('take', 'beTakenBy', ['take %i1', 't %i1', 'get %i1', 'pick up %i1', 'pickup %i1',
+    a.addCommand('take', 'beTakenBy', ['take %i1', 't %i1', 'get %i1', 'pick up %i1', 'pickup %i1',
         'pick %i1 up'
       ],
       'Pick up an item.', 2);
 
-    Person.prototype.addCommand('drop', 'beDroppedBy', ['drop %i1', 'dr %i1', 'put down %i1', 'put %i1 down',
+    a.addCommand('drop', 'beDroppedBy', ['drop %i1', 'dr %i1', 'put down %i1', 'put %i1 down',
       'let %i1 go',
       'let go of %i1',
       'let go %i1', 'release %i1'
@@ -669,13 +669,13 @@ var Adventure = (function() {
     help.helpOrder = 5;
     Person.prototype.help = help;
 
-    Person.prototype.addCommand('examine', 'beExaminedBy', ['examine %i1', 'x %i1', 'look %i1', 'look at %i1',
+    a.addCommand('examine', 'beExaminedBy', ['examine %i1', 'x %i1', 'look %i1', 'look at %i1',
         'l %i1',
         'l at %i1'
       ],
       'Examine an item.', 6);
 
-    Person.prototype.addCommand('use', 'beUsedBy', ['use %i1', 'use %i1 with %i2', 'use %i1 on %i2'],
+    a.addCommand('use', 'beUsedBy', ['use %i1', 'use %i1 with %i2', 'use %i1 on %i2'],
       'Use an item in some way.', 7);
 
     Person.prototype.commands = function() {
