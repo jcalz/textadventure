@@ -186,6 +186,10 @@ var Adventure = (function() {
     a.itemMap = itemMap;
     a.allItems = allItems;
 
+    // KEEP A LIST OF ALL COMMANDS IN THE ADVENTURE
+    var commands = [];
+    a.commands = commands;
+
     // serialize adventure
     var serialize = function() {
       var serializedMap = {};
@@ -301,9 +305,6 @@ var Adventure = (function() {
     };
 
     Item.prototype.beDroppedBy = function(subject) {
-      if (!subject.has(this)) {
-        return "You don't have " + this.definiteName + ".";
-      }
       this.location = subject.location;
       return "You have dropped " + this.definiteName + ".";
     };
@@ -561,130 +562,165 @@ var Adventure = (function() {
     };
     a.addPersonMethod = addMethodFactory('Person', Person);
 
-    a.addCommand = function(subjectCommandName, objectCommandName, templates, help, helpOrder) {
-      var command = function command(object) {
-        if (!this.canSee(object)) {
-          return "You can't see " + object.definiteName + " here.";
-        }
-        if (!(objectCommandName in object)) {
-          // okay let's use the first template
-          var commandName = templates[0].toLowerCase().replace(/%[id]1?[^0-9]*$/, '').trim().replace(
+    a.newCommand = function(options) {
+      options = Object.assign({}, options);
+      if (!options.methodName) throw new Error('The command needs a methodName');
+      if (!options.templates || options.templates.length == 0) throw new Error('The command needs templates');
+      var command;
+      if (typeof options.command == 'function') {
+        command = options.command;
+      } else if (typeof options.command == 'object') {
+        var youCant = options.command.youCant;
+        if (!youCant) {
+          var commandName = options.templates[0].toLowerCase().replace(/%[id]1?[^0-9]*$/, '').trim().replace(
             /%[id]\d+/, 'anything');
-          return "You can't " + commandName + " " + object.definiteName + ".";
+          youCant = "You can't " + commandName + " %i1.";
         }
-        var args = Array.from(arguments);
-        args[0] = this;
-        return object[objectCommandName].apply(object, args);
-      };
-      command.templates = templates;
-      if (help) {
-        command.help = help;
+        var mustSee = ('mustSee' in options.command) ? !!options.command.mustSee : true; // default true
+        var mustHave = !!options.command.mustHave; // default false
+        var objectMethodName = options.command.objectMethodName || false;
+        command = function(object) {
+          if (object && mustHave && !this.has(object)) {
+            return "You don't have " + object.definiteName + ".";
+          }
+          if (object && mustSee && !this.canSee(object)) {
+            return "You can't see " + object.definiteName + " here.";
+          }
+          if (!object) {
+            return youCant.replace(/%[id][0-9]*/gi, '').replace(/\s+/g, ' ');
+          }
+          if (!objectMethodName || !(objectMethodName in object)) {
+            return youCant.replace(/%[id][0-9]*/gi, object.definiteName).replace(/\s+/g, ' ');
+          }
+          var args = Array.from(arguments);
+          args[0] = this;
+          return object[objectMethodName].apply(object, args);
+        };
+      } else {
+        throw new Error('The command needs either a command function or command options object');
       }
-      if (typeof helpOrder === 'undefined') {
-        helpOrder = Math.max.apply(null, Person.prototype.commands().map(function(c) {
-          return c.helpOrder;
-        }).filter(function(o) {
-          return typeof o == 'number';
-        })) + 1;
+      command.templates = options.templates;
+      if (options.help) {
+        command.help = options.help;
       }
-      command.helpOrder = helpOrder;
-      Person.prototype[subjectCommandName] = command;
+      Person.prototype[options.methodName] = command;
+      commands.push(command);
+      return command; // why not
     };
 
-    var go = function(exit) {
-      if (exit.noExit) {
-        return "You can't go " + exit.direction + " from here.";
+    a.newCommand({
+      methodName: "go",
+      templates: ['go %d1', '%d1', 'move %d1', 'walk %d1'],
+      help: 'Go in the specified direction, like North or South.',
+      command: function(exit) {
+        if (exit.noExit) {
+          return "You can't go " + exit.direction + " from here.";
+        }
+        return this.use(exit);
       }
-      return this.use(exit);
-    }
-    go.templates = ['go %d1', '%d1', 'move %d1', 'walk %d1'];
-    go.help = 'Go in the specified direction, like North or South.';
-    go.helpOrder = 0;
-    Person.prototype.go = go;
+    });
 
-    var climb = function(dir) {
-      if (!dir) {
-        dir = 'up';
+    a.newCommand({
+      methodName: "climb",
+      templates: ['climb', 'climb %d1'],
+      command: function(dir) {
+        if (!dir) {
+          var dir = this.location.getExits().find(function(ex) {
+            return ex.direction == 'up';
+          }) || noExit.up
+        }
+        return this.go(dir);
       }
-      return this.go(dir);
-    };
-    climb.templates = ['climb', 'climb %d1'];
-    Person.prototype.climb = climb;
+    });
 
-    var look = function look() {
-      this.location.known = true;
-      return this.location.beExaminedBy(this);
-    };
-    look.templates = ['look', 'l'];
-    look.help = 'Look around you.';
-    look.helpOrder = 1;
-    Person.prototype.look = look;
+    a.newCommand({
+      methodName: "look",
+      templates: ['look', 'l'],
+      help: 'Look around you.',
+      command: function look() {
+        this.location.known = true;
+        return this.location.beExaminedBy(this);
+      }
+    });
 
-    a.addCommand('take', 'beTakenBy', ['take %i1', 't %i1', 'get %i1', 'pick up %i1', 'pickup %i1',
-        'pick %i1 up'
+    a.newCommand({
+      methodName: "take",
+      templates: ["take %i1", "t %i1", "get %i1", "pick up %i1", "pickup %i1", "pick %i1 up"],
+      help: "Pick up an item.",
+      command: {
+        objectMethodName: "beTakenBy"
+      }
+    });
+
+    a.newCommand({
+      methodName: "drop",
+      templates: ["drop %i1", "dr %i1", "put down %i1", "put %i1 down", "let %i1 go", "let go of %i1",
+        "let go %i1", "release %i1"
       ],
-      'Pick up an item.', 2);
+      help: "Put down an item.",
+      command: {
+        objectMethodName: "beDroppedBy",
+        mustHave: true
+      }
+    });
 
-    a.addCommand('drop', 'beDroppedBy', ['drop %i1', 'dr %i1', 'put down %i1', 'put %i1 down',
-      'let %i1 go',
-      'let go of %i1',
-      'let go %i1', 'release %i1'
-    ], 'Put down an item.', 3);
-
-    var inventory = function inventory() {
-      var subject = this;
-      var items = allItems().filter(function(item) {
-        return item.appearsInInventoryOf(subject);
-      }).map(function(i) {
-        return i.indefiniteName;
-      });
-      if (!items.length) return "You don't have anything.";
-      return "You have " + series(items) + ".";
-    }
-    inventory.templates = ['inventory', 'i'];
-    inventory.help = 'List the items in your possession.';
-    inventory.helpOrder = 4;
-    Person.prototype.inventory = inventory;
-
-    var help = function help() {
-      var ret = '';
-      ret += 'Need help?  Here are some commands:\n\n';
-      ret += this.commands().filter(function(c) {
-        return c.help;
-      }).map(function(c) {
-        var shortcut = c.templates.find(function(t) {
-          return t.split(/\s+/)[0].length == 1;
+    a.newCommand({
+      methodName: "inventory",
+      templates: ['inventory', 'i'],
+      help: 'List the items in your possession.',
+      command: function inventory() {
+        var subject = this;
+        var items = allItems().filter(function(item) {
+          return item.appearsInInventoryOf(subject);
+        }).map(function(i) {
+          return i.indefiniteName;
         });
-        return '"' + c.templates[0].toLowerCase().split(/\s+/).map(function(x) {
-          return x.startsWith('%i') ? '[ITEM]' : x.startsWith('%d') ? '[DIRECTION]' : capitalize(x);
-        }).join(' ') + '": ' + c.help + (shortcut ? ' (Shortcut: "' + shortcut.charAt(0).toUpperCase() +
-          '")' :
-          '');
-      }).join('\n');
-      ret += '\n\nThere are other commands not listed here.  Try stuff out.  Good luck!';
-      return ret;
-    };
-    help.templates = ['help', 'h', 'help me'];
-    help.help = 'Read these words.';
-    help.helpOrder = 5;
-    Person.prototype.help = help;
+        if (!items.length) return "You don't have anything.";
+        return "You have " + series(items) + ".";
+      }
+    });
 
-    a.addCommand('examine', 'beExaminedBy', ['examine %i1', 'x %i1', 'look %i1', 'look at %i1',
-        'l %i1',
-        'l at %i1'
-      ],
-      'Examine an item.', 6);
+    a.newCommand({
+      methodName: "help",
+      command: function help() {
+        var ret = '';
+        ret += 'Need help?  Here are some commands:\n\n';
+        ret += commands.filter(function(c) {
+          return c.help;
+        }).map(function(c) {
+          var shortcut = c.templates.find(function(t) {
+            return t.split(/\s+/)[0].length == 1;
+          });
+          return '"' + c.templates[0].toLowerCase().split(/\s+/).map(function(x) {
+            return x.startsWith('%i') ? '[ITEM]' : x.startsWith('%d') ? '[DIRECTION]' : capitalize(x);
+          }).join(' ') + '": ' + c.help + (shortcut ? ' (Shortcut: "' + shortcut.charAt(0).toUpperCase() +
+            '")' :
+            '');
+        }).join('\n');
+        ret += '\n\nThere are other commands not listed here.  Try stuff out.  Good luck!';
+        return ret;
+      },
+      templates: ['help', 'h', 'help me'],
+      help: 'Read these words.'
+    });
 
-    a.addCommand('use', 'beUsedBy', ['use %i1', 'use %i1 with %i2', 'use %i1 on %i2'],
-      'Use an item in some way.', 7);
+    a.newCommand({
+      methodName: "examine",
+      templates: ["examine %i1", "x %i1", "look %i1", "look at %i1", "l %i1", "l at %i1"],
+      help: "Examine an item.",
+      command: {
+        objectMethodName: "beExaminedBy"
+      }
+    });
 
-    Person.prototype.commands = function() {
-      return objectValues(this, true).filter(function(v) {
-        return typeof v == 'function' && 'templates' in v && v.templates.length > 0;
-      }).sort(function(x, y) {
-        return (x.helpOrder || 0) - (y.helpOrder || 0);
-      });
-    };
+    a.newCommand({
+      methodName: "use",
+      templates: ["use %i1", "use %i1 with %i2", "use %i1 on %i2"],
+      help: "Use an item in some way.",
+      command: {
+        objectMethodName: "beUsedBy"
+      }
+    });
 
     function Exit(options) {
       if (typeof options === 'string') {
@@ -947,7 +983,7 @@ var Adventure = (function() {
       str = str.replace(/(\b|^)please( |$)/g, '').trim(); // no need to be polite;
       var argRe = /%[id]\d*/g;
       var allMatches = [];
-      subject.commands().forEach(function(command) {
+      commands.forEach(function(command) {
         command.templates.forEach(function(template) {
           var lens = [];
           while (true) {

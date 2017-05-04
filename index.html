@@ -307,22 +307,81 @@
     // "use %i1" means "use" followed by an ITEM, to be passed as FIRST parameter to the function.
     // "give %i1 to %i2", means "give"
     // "go %d1" // d means DIRECTION
-    adventure.addCommand('read', 'beReadBy', ['read %i1'], 'Read something.');
-    adventure.addCommand('eat', 'beEatenBy', ['eat %i1']);
-    adventure.addCommand('open', 'beOpenedBy', ['open %i1', 'open %i1 with %i2', 'use %i2 to open %i1', 'open %i1 using %i2']);
-    adventure.addCommand('close', 'beClosedBy', ['close %i1', 'shut %i1']);
-    adventure.addCommand('unlock', 'beUnlockedBy', ['unlock %i1', 'unlock %i1 with %i2', 'use %i2 to unlock %i1',
-      'unlock %i1 using %i2'
-    ]);
-    adventure.addCommand('lock', 'beLockedBy', ['lock %i1', 'lock %i1 with %i2', 'use %i2 to lock %i1', 'lock %i1 using %i2']);
-    adventure.addCommand('move', 'beMovedBy', ['move %i1']);
-    adventure.addCommand('push', 'bePushedBy', ['push %i1', 'shove %i1', 'press %i1', 'push on %i1', 'press on %i1']);
-    adventure.addCommand('pull', 'bePulledBy', ['pull %i1', 'tug %i1', 'yank %i1', 'pull on %i1', 'tug on %i1', 'yank on %i1']);
-    adventure.addCommand('putInto', 'bePutIntoBy', ['put %i2 into %i1', 'put %i2 in %i1', 'put %i2 inside %i1',
-      'place %i2 into %i1', 'place %i2 in %i1', 'place %i2 inside %i1'
-    ]);
+    adventure.newCommand({
+      methodName: "read",
+      templates: ["read %i1"],
+      help: "Read something.",
+      command: {
+        objectMethodName: "beReadBy"
+      }
+    });
+    adventure.newCommand({
+      methodName: "eat",
+      templates: ["eat %i1"],
+      command: {
+        objectMethodName: "beEatenBy"
+      }
+    });
+    adventure.newCommand({
+      methodName: "open",
+      templates: ["open %i1", "open %i1 with %i2", "use %i2 to open %i1", "open %i1 using %i2"],
+      command: {
+        objectMethodName: "beOpenedBy"
+      }
+    });
+    adventure.newCommand({
+      methodName: "close",
+      templates: ["close %i1", "shut %i1"],
+      command: {
+        objectMethodName: "beClosedBy"
+      }
+    });
+    adventure.newCommand({
+      methodName: "unlock",
+      templates: ["unlock %i1", "unlock %i1 with %i2", "use %i2 to unlock %i1", "unlock %i1 using %i2"],
+      command: {
+        objectMethodName: "beUnlockedBy"
+      }
+    });
+    adventure.newCommand({
+      methodName: "lock",
+      templates: ["lock %i1", "lock %i1 with %i2", "use %i2 to lock %i1", "lock %i1 using %i2"],
+      command: {
+        objectMethodName: "beLockedBy"
+      }
+    });
+    adventure.newCommand({
+      methodName: "move",
+      templates: ["move %i1"],
+      command: {
+        objectMethodName: "beMovedBy"
+      }
+    });
+    adventure.newCommand({
+      methodName: "push",
+      templates: ["push %i1", "shove %i1", "press %i1", "push on %i1", "press on %i1"],
+      command: {
+        objectMethodName: "bePushedBy",
+        youCant: "Pushing %i1 doesn't do anything."
+      }
+    });
+    adventure.newCommand({
+      methodName: "pull",
+      templates: ["pull %i1", "tug %i1", "yank %i1", "pull on %i1", "tug on %i1", "yank on %i1"],
+      command: {
+        objectMethodName: "bePulledBy"
+      }
+    });
+    adventure.newCommand({
+      methodName: "putInto",
+      templates: ["put %i2 into %i1", "put %i2 in %i1", "put %i2 inside %i1", "place %i2 into %i1",
+        "place %i2 in %i1", "place %i2 inside %i1"
+      ],
+      command: {
+        objectMethodName: "bePutIntoBy"
+      }
+    });
 
-    
     var you = {};
     you.id = 'you';
     you.name = 'you';
@@ -332,7 +391,6 @@
     you.plural = true; // I think this works for second person
     you.it = 'you';
     you = adventure.newPerson(you);
-
 
     var genericBePutIntoBy = function(subject, item) {
       if (!subject.has(item)) {
@@ -344,8 +402,8 @@
       }
       return "You have put " + item.definiteName + " in " + this.definiteName + ".";
     };
-    adventure.addPlaceMethod('bePutIntoBy',genericBePutIntoBy);
-    
+    adventure.addPlaceMethod('bePutIntoBy', genericBePutIntoBy);
+
     // PLACES
     var room = {
       id: 'room'
@@ -735,7 +793,6 @@
       return this.superMethod('beExaminedBy')(subject);
     }        
     */
-
 
     var initialState = adventure.serialize();
     var previouslySavedState = hasLocalStorage && localStorage.getItem(autosaveKey);
