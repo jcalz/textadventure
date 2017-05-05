@@ -130,41 +130,100 @@ var Adventure = (function() {
 
     a.maxNesting = 256;
 
-    // directions 
-    var directions = {
-      north: ['n', 'northern', 'northward', 'northwards'],
-      south: ['s', 'southern', 'southward', 'southwards'],
-      east: ['e', 'eastern', 'eastward', 'eastwards'],
-      west: ['w', 'western', 'westward', 'westwards'],
-      northeast: ['ne', 'northeastern', 'northeastward', 'northeastwards'],
-      southeast: ['se', 'southeastern', 'southeastward', 'southeastwards'],
-      northwest: ['nw', 'northwestern', 'northwestward', 'northwestwards'],
-      southwest: ['sw', 'southwestern', 'southwestward', 'southeastwards'],
-      up: ['u', 'upper', 'upward', 'upwards', 'above', 'high', 'higher', 'highest', 'over', 'top'],
-      down: ['d', 'lower', 'downward', 'downwards', 'below', 'lower', 'low', 'lowest', 'under', 'beneath',
-        'underneath',
-        'bottom'
-      ]
-    };
+    // KEEP A MAP OF ALL DIRECTIONS IN THE ADVENTURE
+    var directions = {};
+    //var oppositeDirections = {};
+    //var dirRegExps = {};
+    a.directions = directions;
 
-    var oppositeDirections = {
-      north: 'south',
-      east: 'west',
-      northeast: 'southwest',
-      northwest: 'southeast',
-      up: 'down'
+    var directionName = function(dir) {
+      if (dir in directions) return directions[dir].name;
+      return dir;
     }
-    Object.keys(oppositeDirections).forEach(function(dir) {
-      oppositeDirections[oppositeDirections[dir]] = dir;
-    });
 
-    var dirRegExps = {};
-    Object.keys(directions).forEach(function(k) {
-      var re = '(?:leading )?(?:on |to |toward )?(?:the |a |an )?(?:' + k + '|' + directions[k].join('|') + ')';
-      dirRegExps[k] = {
+    var directionRegExps = function(dir, keywords) {
+      if (dir in directions) return directions[dir].regExps;
+      keywords = keywords || [dir];
+      var re = '(?:leading )?(?:on |to |toward )?(?:the |a |an )?(?:' + keywords.join('|') + ')';
+      return {
         start: new RegExp('^' + re + '(?:^|\\s+)(.*)$', 'i'),
         end: new RegExp('^(.*?)(?:^|\\s+)' + re + '$', 'i')
       };
+    }
+
+    a.newDirection = function(options) {
+      if (!('name' in options) && (!('id' in options))) throw new Error('a direction needs a name');
+      if (!('name' in options)) options.name = options.id;
+      if (!('id' in options)) {
+        var i = 0;
+        var id = name;
+        while (id in options) {
+          i++;
+          id = name + i;
+        }
+        options.id = id;
+      }
+      if (options.id in directions) throw new Error('ID conflict with direction ' + options.id);
+      var direction = {};
+      direction.id = options.id;
+      direction.name = options.name;
+      direction.keywords = options.keywords || [direction.name];
+      direction.oppositeId = false;
+      if (options.opposite) {
+        var oppositeOptions = Object.assign({}, options.opposite);
+        delete oppositeOptions.opposite;
+        var opposite = a.newDirection(oppositeOptions);
+        direction.oppositeId = opposite.id;
+        opposite.oppositeId = direction.id;
+      }
+      direction.regExps = directionRegExps(options.id, direction.keywords);
+      directions[options.id] = direction;
+      return direction;
+    };
+
+    a.newDirection({
+      id: 'north',
+      keywords: ['north', 'n', 'northern', 'northward', 'northwards'],
+      opposite: {
+        id: 'south',
+        keywords: ['south', 's', 'southern', 'southward', 'southwards']
+      }
+    });
+    a.newDirection({
+      id: 'east',
+      keywords: ['east', 'e', 'eastern', 'eastward', 'eastwards'],
+      opposite: {
+        id: 'west',
+        keywords: ['west', 'w', 'western', 'westward', 'westwards']
+      }
+    });
+    a.newDirection({
+      id: 'northeast',
+      keywords: ['northeast', 'ne', 'northeastern', 'northeastward', 'northeastwards'],
+      opposite: {
+        id: 'southwest',
+        keywords: ['southwest', 'sw', 'southwestern', 'southwestward', 'southwestwards']
+      }
+    });
+    a.newDirection({
+      id: 'northwest',
+      keywords: ['northwest', 'nw', 'northwestern', 'northwestward', 'northwestwards'],
+      opposite: {
+        id: 'southeast',
+        keywords: ['southeast', 'se', 'southeastern', 'southeastward', 'southeastwards']
+      }
+    });
+    a.newDirection({
+      id: 'up',
+      keywords: ['up', 'u', 'upper', 'upward', 'upwards', 'above', 'high', 'higher', 'highest', 'over', 'top'],
+      opposite: {
+        id: 'down',
+        keywords: ['down', 'lower', 'downward', 'downwards', 'below', 'lower', 'low', 'lowest', 'under',
+          'beneath',
+          'underneath',
+          'bottom'
+        ]
+      }
     });
 
     // KEEP A MAP OF ALL ITEMS IN THE ADVENTURE
@@ -318,8 +377,10 @@ var Adventure = (function() {
       ret += (this.description || capitalize(this.it) + (this.plural ? "'re" : "'s") + ' just ' + this.indefiniteName +
         '.');
 
-      // describe exits
-      var exits = this.getExits();
+      // describe exits with directions
+      var exits = this.getExits().filter(function(ex) {
+        return ex.direction;
+      });
       if (exits.length > 0) {
         var exitTypes = {};
         exits.forEach(function(ex) {
@@ -331,7 +392,7 @@ var Adventure = (function() {
               directions: []
             };
           }
-          exitTypes[type].directions.push(ex.direction);
+          exitTypes[type].directions.push(directionName(ex.direction));
         });
         Object.keys(exitTypes).forEach(function(type) {
           if (subject.location === here) {
@@ -349,9 +410,9 @@ var Adventure = (function() {
         });
       }
 
-      // describe non-exits
+      // describe non-exits or exits with no direction
       var items = this.listContents().filter(function(it) {
-        return !(it instanceof Exit);
+        return (!(it instanceof Exit) || (!it.direction));
       });
       var itemNames = items.map(function(it) {
         return it.indefiniteName;
@@ -614,7 +675,7 @@ var Adventure = (function() {
       help: 'Go in the specified direction, like North or South.',
       command: function(exit) {
         if (exit.noExit) {
-          return "You can't go " + exit.direction + " from here.";
+          return "You can't go " + directionName(exit.direction) + " from here.";
         }
         return this.use(exit);
       }
@@ -787,7 +848,7 @@ var Adventure = (function() {
         };
       }
 
-      reverse.direction = immutable(reverse.direction || oppositeDirections[unwrap(options.direction)]);
+      reverse.direction = immutable(reverse.direction || (directions[unwrap(options.direction)] || {}).oppositeId);
 
       if (('id' in reverse) && (unwrap(reverse.id) in itemMap)) throw new Error('Cannot reuse id ' + unwrap(reverse
           .id) +
@@ -917,11 +978,12 @@ var Adventure = (function() {
         return ex.name === name;
       });
       if (exitsOfSameType.length < 2) return ret;
-      ret += ' leading ' + this.direction;
+      ret += ' leading ' + directionName(this.direction);
       return ret;
     };
     Exit.prototype.beUsedBy = function(subject) {
-      var ret = 'You use ' + this.definiteName + ' leading ' + this.direction + '.\n\n';
+      var ret = 'You use ' + this.definiteName + (this.direction ? ' leading ' + directionName(this.direction) :
+        '') + '.\n\n';
       subject.location = this.destination;
       return ret + subject.look();
     };
@@ -939,8 +1001,8 @@ var Adventure = (function() {
     Object.keys(directions).forEach(function(k) {
       noExit[k] = new Exit({
         id: 'no-exit-' + k,
-        name: 'exit leading ' + k,
-        definiteName: 'an exit leading ' + k,
+        name: 'exit leading ' + directionName(k),
+        definiteName: 'an exit leading ' + directionName(k),
         keywords: ['exit', 'door'],
         direction: k,
         location: null,
@@ -1055,7 +1117,8 @@ var Adventure = (function() {
       // assume that string is alphanumeric separated by single spaces  
       // check to see if item is a nearby exit specified by direction
       if ((item instanceof Exit) && (item.noExit || (item.location === subject.location)) && item.direction) {
-        var matches = str.match(dirRegExps[item.direction].start) || str.match(dirRegExps[item.direction].end);
+        var regExps = directionRegExps(item.direction);
+        var matches = str.match(regExps.start) || str.match(regExps.end);
         if (matches) {
           str = matches[1]; // strip direction specifier off
           if (!str) return true; //specifying just the direction is considered a match                    
