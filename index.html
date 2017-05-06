@@ -386,7 +386,6 @@
     you.id = 'you';
     you.name = 'you';
     you.keywords = ['me', 'myself', 'I'];
-    you.known = true;
     you.unlisted = true;
     you.plural = true; // I think this works for second person
     you.it = 'you';
@@ -603,7 +602,7 @@
       var ret = 'The bed is huge with pink blankets and purple pillows.';
       if (teddyBear.location === bed.location) {
         teddyBear.hidden = false; // reveal the teddy bear
-        teddyBear.known = true;
+        subject.setKnown(teddyBear);
         ret += ' There is a teddy bear on the bed.';
       }
       return ret;
@@ -639,7 +638,7 @@
         'It is wearing green corduroy overalls with a pocket in the front.';
       if (key.location === this) {
         ret += ' You notice a key sticking out of the pocket.';
-        key.known = true;
+        subject.setKnown(key);
       }
       return ret;
     }
@@ -767,7 +766,7 @@
       if (!boulder.budged) {
         boulder.budged = true;
         holeInTheWall.hidden = false;
-        holeInTheWall.known = true;
+        subject.setKnown(holeInTheWall);
         return "You bend down and push the boulder as hard as you can.  At first, it won't budge. " +
           "Finally, it starts moving along the wall, little by little.  Eventually you push it into " +
           "the corner where it stays.  You can't move it any further, and now you're sweaty and tired. " +

@@ -4,7 +4,6 @@
 //TODO "jump"
 //TODO "put ___ on ____"?
 //TODO better name/pronoun grammar management
-//TODO 'known' should be property of subject, not items... maybe even 'hidden'?
 //TODO allow for multiple subjects 
 //TODO add timed events with some kind of 'tick' handler or some other system
 
@@ -318,7 +317,6 @@ var Adventure = (function() {
       options.location = (unwrap(options.canBeTaken) ? mutable : immutable)(options.location || null);
       options.hidden = 'hidden' in options ? mutable(options.hidden) : mutable(false);
       options.unlisted = immutable('unlisted' in options ? options.unlisted : false);
-      options.known = mutable('known' in options ? options.known : false);
       options.isItem = immutable(true);
 
       var location = options.location;
@@ -411,7 +409,7 @@ var Adventure = (function() {
       }
 
       // describe non-exits or exits with no direction
-      var items = this.listContents().filter(function(it) {
+      var items = this.listContents(subject).filter(function(it) {
         return (!(it instanceof Exit) || (!it.direction));
       });
       var itemNames = items.map(function(it) {
@@ -436,13 +434,13 @@ var Adventure = (function() {
       });
     };
 
-    Item.prototype.listContents = function() {
+    Item.prototype.listContents = function(subject) {
       var here = this;
       var items = allItems().filter(function(it) {
         return it.location === here && !it.hidden;
       });
       items.forEach(function(i) {
-        i.known = true;
+        subject.setKnown(i);
       });
       items = items.filter(function(it) {
         return !(it.unlisted)
@@ -495,7 +493,7 @@ var Adventure = (function() {
     };
 
     // copy the state of this item into a string
-    var serializationPrefix = 'ITEM!';
+    var serializationPrefix = 'I!';
 
     // return a string representing the current state of this item, or falsy value if no state to serialize
     Item.prototype.serialize = function() {
@@ -613,16 +611,36 @@ var Adventure = (function() {
         options.it = immutable('she');
       }
       options.isPerson = immutable(true);
+      options.knownItems = [this]; 
       Item.call(this, options);
-
+        
     }
 
     Person.prototype = Object.create(Item.prototype);
+    
+    Person.prototype.setKnown = function(object, value) {
+        if (typeof value === 'undefined') value = true;
+        this.knownItems = this.knownItems.filter(function(it){return it !== object;});
+        if (value) this.knownItems.push(object);
+    };
+    
+    Person.prototype.isKnown = function(object) {
+        return tbis.knownItems.indexOf(object)!=-1;
+    };
+    
     a.newPerson = function(options) {
       return new Person(options)
     };
     a.addPersonMethod = addMethodFactory('Person', Person);
 
+    /*
+    var expandTemplates = function(templates) {
+    return [].concat.apply([],templates.map(function(template){
+        return [template];
+    }));
+    };
+    */
+    
     a.newCommand = function(options) {
       options = Object.assign({}, options);
       if (!options.methodName) throw new Error('The command needs a methodName');
@@ -699,7 +717,7 @@ var Adventure = (function() {
       templates: ['look', 'l'],
       help: 'Look around you.',
       command: function look() {
-        this.location.known = true;
+        this.setKnown(this.location);
         return this.location.beExaminedBy(this);
       }
     });
@@ -1008,7 +1026,6 @@ var Adventure = (function() {
         location: null,
         destination: null,
         noExit: immutable(true),
-        known: immutable(false),
         hidden: immutable(true)
       });
     });
@@ -1145,8 +1162,8 @@ var Adventure = (function() {
       var exits = null;
       var getExits = function() {
         if (!exits) {
-          exits = allItems().filter(function(it) {
-            return (it.known) && (it instanceof Exit) && (it.location === subject.location);
+          exits = subject.knownItems.filter(function(it) {
+            return (it instanceof Exit) && (it.location === subject.location);
           });
           exits.push.apply(exits, objectValues(noExit));
         }
@@ -1155,9 +1172,7 @@ var Adventure = (function() {
       var items = null;
       var getItems = function() {
         if (!items) {
-          items = allItems().filter(function(it) {
-            return (it.known);
-          });
+          items = subject.knownItems.slice();
           items.sort(function(x, y) {
             return +subject.canSee(y) - subject.canSee(x);
           });
