@@ -324,28 +324,28 @@
     });
     adventure.newCommand({
       methodName: "open",
-      templates: ["open %i1", "open %i1 with %i2", "use %i2 to open %i1", "open %i1 using %i2"],
+      templates: ["open %i1", "open %i1 with|using %i2", "use|u %i2 to open %i1"],
       command: {
         objectMethodName: "beOpenedBy"
       }
     });
     adventure.newCommand({
       methodName: "close",
-      templates: ["close %i1", "shut %i1"],
+      templates: "close|shut %i1",
       command: {
         objectMethodName: "beClosedBy"
       }
     });
     adventure.newCommand({
       methodName: "unlock",
-      templates: ["unlock %i1", "unlock %i1 with %i2", "use %i2 to unlock %i1", "unlock %i1 using %i2"],
+      templates: ["unlock %i1", "unlock %i1 with|using %i2", "use|u %i2 to unlock %i1"],
       command: {
         objectMethodName: "beUnlockedBy"
       }
     });
     adventure.newCommand({
       methodName: "lock",
-      templates: ["lock %i1", "lock %i1 with %i2", "use %i2 to lock %i1", "lock %i1 using %i2"],
+      templates: ["lock %i1", "lock %i1 with|using %i2", "use|u %i2 to lock %i1"],
       command: {
         objectMethodName: "beLockedBy"
       }
@@ -359,7 +359,7 @@
     });
     adventure.newCommand({
       methodName: "push",
-      templates: ["push %i1", "shove %i1", "press %i1", "push on %i1", "press on %i1"],
+      templates: ["push|shove|press %i1", "push|press on %i1"],
       command: {
         objectMethodName: "bePushedBy",
         youCant: "Pushing %i1 doesn't do anything."
@@ -367,16 +367,14 @@
     });
     adventure.newCommand({
       methodName: "pull",
-      templates: ["pull %i1", "tug %i1", "yank %i1", "pull on %i1", "tug on %i1", "yank on %i1"],
+      templates: "pull|tug|yank |on| %i1",
       command: {
         objectMethodName: "bePulledBy"
       }
     });
     adventure.newCommand({
       methodName: "putInto",
-      templates: ["put %i2 into %i1", "put %i2 in %i1", "put %i2 inside %i1", "place %i2 into %i1",
-        "place %i2 in %i1", "place %i2 inside %i1"
-      ],
+      templates: ["put|place %i2 into|in|inside %i1"],
       command: {
         objectMethodName: "bePutIntoBy"
       }

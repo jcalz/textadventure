@@ -217,7 +217,7 @@ var Adventure = (function() {
       keywords: ['up', 'u', 'upper', 'upward', 'upwards', 'above', 'high', 'higher', 'highest', 'over', 'top'],
       opposite: {
         id: 'down',
-        keywords: ['down', 'lower', 'downward', 'downwards', 'below', 'lower', 'low', 'lowest', 'under',
+        keywords: ['down', 'd', 'lower', 'downward', 'downwards', 'below', 'lower', 'low', 'lowest', 'under',
           'beneath',
           'underneath',
           'bottom'
@@ -611,40 +611,57 @@ var Adventure = (function() {
         options.it = immutable('she');
       }
       options.isPerson = immutable(true);
-      options.knownItems = [this]; 
+      options.knownItems = [this];
       Item.call(this, options);
-        
+
     }
 
     Person.prototype = Object.create(Item.prototype);
-    
+
     Person.prototype.setKnown = function(object, value) {
-        if (typeof value === 'undefined') value = true;
-        this.knownItems = this.knownItems.filter(function(it){return it !== object;});
-        if (value) this.knownItems.push(object);
+      if (typeof value === 'undefined') value = true;
+      this.knownItems = this.knownItems.filter(function(it) {
+        return it !== object;
+      });
+      if (value) this.knownItems.push(object);
     };
-    
+
     Person.prototype.isKnown = function(object) {
-        return tbis.knownItems.indexOf(object)!=-1;
+      return tbis.knownItems.indexOf(object) != -1;
     };
-    
+
     a.newPerson = function(options) {
       return new Person(options)
     };
     a.addPersonMethod = addMethodFactory('Person', Person);
 
-    /*
     var expandTemplates = function(templates) {
-    return [].concat.apply([],templates.map(function(template){
-        return [template];
-    }));
+      if (!templates.length) return [];
+      var expandTemplate = function expandTemplate(t) {
+        t = t.replace(/\|+/g, '|').replace(/\s\|\s/g, '').replace(/[^a-z0-9|%\s]/gi, '').
+        replace(/([^\s|])%/g, '$1').replace(/%(?![id]\d*([\s|]|$))/gi, '').replace(/\s+/g, ' ').trim();
+        var b = t.indexOf('|');
+        if (b < 0) {
+          var ret = {};
+          ret[t] = true;
+          return ret;
+        }
+        var s1 = t.substring(0, b).lastIndexOf(' ') + 1;
+        var s2 = (t + ' ').indexOf(' ', b);
+        var t1 = t.substring(0, s1) + t.substring(b + 1);
+        var t2 = t.substring(0, b) + t.substring(s2);
+        return Object.assign(expandTemplate(t2), expandTemplate(t1));
+      };
+      return Object.keys(Object.assign.apply({}, templates.map(expandTemplate)));
+
     };
-    */
-    
+
     a.newCommand = function(options) {
       options = Object.assign({}, options);
       if (!options.methodName) throw new Error('The command needs a methodName');
-      if (!options.templates || options.templates.length == 0) throw new Error('The command needs templates');
+      if (typeof options.templates == 'string') options.templates = [options.templates];
+      if (!options.templates || !options.templates.length) throw new Error('The command needs templates');
+      options.templates = expandTemplates(Array.from(options.templates));
       var command;
       if (typeof options.command == 'function') {
         command = options.command;
@@ -689,7 +706,7 @@ var Adventure = (function() {
 
     a.newCommand({
       methodName: "go",
-      templates: ['go %d1', '%d1', 'move %d1', 'walk %d1'],
+      templates: 'go|move|walk| %d1',
       help: 'Go in the specified direction, like North or South.',
       command: function(exit) {
         if (exit.noExit) {
@@ -701,7 +718,7 @@ var Adventure = (function() {
 
     a.newCommand({
       methodName: "climb",
-      templates: ['climb', 'climb %d1'],
+      templates: 'climb |%d1',
       command: function(dir) {
         if (!dir) {
           var dir = this.location.getExits().find(function(ex) {
@@ -714,7 +731,7 @@ var Adventure = (function() {
 
     a.newCommand({
       methodName: "look",
-      templates: ['look', 'l'],
+      templates: 'look|l',
       help: 'Look around you.',
       command: function look() {
         this.setKnown(this.location);
@@ -724,7 +741,7 @@ var Adventure = (function() {
 
     a.newCommand({
       methodName: "take",
-      templates: ["take %i1", "t %i1", "get %i1", "pick up %i1", "pickup %i1", "pick %i1 up"],
+      templates: ["take|t|get|pickup %i1", "pick up %i1", "pick %i1 up"],
       help: "Pick up an item.",
       command: {
         objectMethodName: "beTakenBy"
@@ -733,9 +750,7 @@ var Adventure = (function() {
 
     a.newCommand({
       methodName: "drop",
-      templates: ["drop %i1", "dr %i1", "put down %i1", "put %i1 down", "let %i1 go", "let go of %i1",
-        "let go %i1", "release %i1"
-      ],
+      templates: ["drop|d|release %i1", "put down %i1", "put %i1 down", "let %i1 go", "let go |of| %i1"],
       help: "Put down an item.",
       command: {
         objectMethodName: "beDroppedBy",
@@ -745,7 +760,7 @@ var Adventure = (function() {
 
     a.newCommand({
       methodName: "inventory",
-      templates: ['inventory', 'i'],
+      templates: 'inventory|i',
       help: 'List the items in your possession.',
       command: function inventory() {
         var subject = this;
@@ -779,13 +794,13 @@ var Adventure = (function() {
         ret += '\n\nThere are other commands not listed here.  Try stuff out.  Good luck!';
         return ret;
       },
-      templates: ['help', 'h', 'help me'],
+      templates: ['help|h', 'help me'],
       help: 'Read these words.'
     });
 
     a.newCommand({
       methodName: "examine",
-      templates: ["examine %i1", "x %i1", "look %i1", "look at %i1", "l %i1", "l at %i1"],
+      templates: ["examine|x %i1", "look|l |at %i1"],
       help: "Examine an item.",
       command: {
         objectMethodName: "beExaminedBy"
@@ -794,7 +809,7 @@ var Adventure = (function() {
 
     a.newCommand({
       methodName: "use",
-      templates: ["use %i1", "use %i1 with %i2", "use %i1 on %i2"],
+      templates: ["use|u %i1", "use|u %i1 with|on %i2"],
       help: "Use an item in some way.",
       command: {
         objectMethodName: "beUsedBy"
