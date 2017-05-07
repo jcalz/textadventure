@@ -385,8 +385,8 @@
     you.name = 'you';
     you.keywords = ['me', 'myself', 'I'];
     you.unlisted = true;
-    you.plural = true; // I think this works for second person
-    you.it = 'you';
+    you.pronoun = 'you';
+    you.pluralName = 'you';
     you = adventure.newPerson(you);
 
     var genericBePutIntoBy = function(subject, item) {
@@ -614,12 +614,12 @@
 
     bedroom.newBackgroundItem({
       name: 'pillows',
-      plural: true,
+      pronoun: 'they',
       keywords: ['pillow', 'pillows']
     });
     bedroom.newBackgroundItem({
       name: 'blankets',
-      plural: true,
+      pronoun: 'they',
       keywords: ['blanket', 'blankets']
     });
 

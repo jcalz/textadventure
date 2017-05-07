@@ -3,14 +3,13 @@
 //TODO maybe ambiguous items should be a warning error rather than first-found?
 //TODO "jump"
 //TODO "put ___ on ____"?
-//TODO better name/pronoun grammar management
 //TODO allow for multiple subjects 
 //TODO add timed events with some kind of 'tick' handler or some other system
 
 var Adventure = (function() {
 
-  var Adv = {};
-  Adv.newAdventure = function() {
+  var A = {};
+  A.newAdventure = function() {
     return new Adventure();
   };
 
@@ -27,23 +26,190 @@ var Adventure = (function() {
     });
   };
 
-  // string manipulation functions    
+  // string/grammar manipulation functions    
   function capitalize(str) {
     return str.charAt(0).toUpperCase() + str.slice(1);
   }
-  Adv.capitalize = capitalize;
+  A.capitalize = capitalize;
 
   function titleCase(str) {
     return str.toLowerCase().split(" ").map(capitalize).join(" ");
   }
-  Adv.titleCase = titleCase;
+  A.titleCase = titleCase;
 
   function series(strs, conjunction) {
     conjunction = conjunction || 'and';
     if (strs.length < 3) return strs.join(' ' + conjunction + ' ');
     return strs.slice(0, -1).join(', ') + ', ' + conjunction + ' ' + strs[strs.length - 1];
   }
-  Adv.series = series;
+  A.series = series;
+
+  var gram = function(v) {
+    var f = function(nom) {
+      if (!nom) {
+        var o = {};
+        objectValues(v).forEach(function(k) {
+          o[k] = true;
+        });
+        return Object.keys(o).join('|');
+      }
+      if (typeof nom === 'object')
+        nom = nom.pronoun;
+
+      nom = nom.toLowerCase();
+      if (nom in v) return v[nom];
+      return v.it;
+    };
+    return f;
+  };
+
+  function addS(name) {
+    if ((/[^aeiou]y$/i).test(name)) {
+      return name.substring(0, name.length - 1) + 'ies';
+    } else if ((/(s|x|z|ch|sh|[^aeiou]o)$/i).test(name)) {
+      return name + 'es';
+    } else {
+      return name + 's';
+    }
+  }
+
+  var are = gram({
+    i: 'am',
+    we: 'are',
+    you: 'are',
+    he: 'is',
+    she: 'is',
+    it: 'is',
+    they: 'are'
+  });
+  var have = gram({
+    i: 'have',
+    we: 'have',
+    you: 'have',
+    he: 'has',
+    she: 'has',
+    it: 'has',
+    they: 'have'
+  });
+  var re = gram({
+    i: 'm',
+    we: 're',
+    you: 're',
+    he: 's',
+    she: 's',
+    it: 's',
+    they: 're'
+  });
+  var ve = gram({
+    i: 've',
+    we: 've',
+    you: 've',
+    he: 's',
+    she: 's',
+    it: 's',
+    they: 've'
+  });
+
+  var thirdSing = gram({
+    i: false,
+    we: false,
+    you: false,
+    he: true,
+    she: true,
+    it: true,
+    they: false
+  });
+  var verb = function(vb, nom) {
+    if (typeof vb !== 'string') return '';
+    var vbl = vb.toLowerCase();
+    if (vbl == 'are') return are(nom);
+    if (vbl == 'have') return have(nom);
+    if (vbl === 're') return re(nom);
+    if (vbl === 've') return ve(nom);
+    if (vbl === "'re") return "'" + re(nom);
+    if (vbl === "'ve") return "'" + ve(nom);
+    if (!nom) return vb + '|' + addS(vb);
+    if (thirdSing(nom)) return addS(vb);
+    return vb;
+  }
+
+  var grammar = {
+    they: gram({
+      i: 'I',
+      we: 'we',
+      you: 'you',
+      he: 'he',
+      she: 'she',
+      it: 'it',
+      they: 'they'
+    }),
+    them: gram({
+      i: 'me',
+      we: 'us',
+      you: 'you',
+      he: 'him',
+      she: 'her',
+      it: 'it',
+      they: 'them'
+    }),
+    their: gram({
+      i: 'my',
+      we: 'our',
+      you: 'your',
+      he: 'his',
+      she: 'her',
+      it: 'its',
+      they: 'their'
+    }),
+    theirs: gram({
+      i: 'mine',
+      we: 'ours',
+      you: 'yours',
+      he: 'his',
+      she: 'hers',
+      it: 'its',
+      they: 'theirs'
+    }),
+    themselves: gram({
+      i: 'myself',
+      we: 'ourselves',
+      you: 'yourself',
+      he: 'himself',
+      she: 'herself',
+      it: 'itself',
+      they: 'themselves'
+    }),
+    verb: verb,
+    are: are,
+    have: have,
+    re: re,
+    ve: ve,
+    theyre: function(x) {
+      return grammar.they(x) + "'" + grammar.re(x);
+    },
+    theyve: function(x) {
+      return grammar.they(x) + "'" + grammar.ve(x);
+    },
+    toPlural: gram({
+      i: 'we',
+      we: 'we',
+      you: 'you',
+      he: 'they',
+      she: 'they',
+      it: 'they',
+      they: 'they'
+    }),
+    isPlural: gram({
+      i: false,
+      we: true,
+      you: false,
+      he: false,
+      she: false,
+      it: false,
+      they: true
+    })
+  };
+  A.grammar = grammar;
 
   // mutability for options
   function MutabilityMarker(mutable, object) {
@@ -58,7 +224,7 @@ var Adventure = (function() {
     }
     return new MutabilityMarker(true, obj);
   }
-  Adv.mutable = mutable;
+  A.mutable = mutable;
 
   function immutable(obj, enforceIfWrapped) {
     if (obj instanceof MutabilityMarker) {
@@ -67,7 +233,7 @@ var Adventure = (function() {
     }
     return new MutabilityMarker(false, obj);
   }
-  Adv.immutable = immutable;
+  A.immutable = immutable;
 
   function unwrap(obj) {
     if (obj instanceof MutabilityMarker)
@@ -102,24 +268,16 @@ var Adventure = (function() {
     return immutableProperties;
   }
 
-  // default names for an item given its name and plurality
-  function getDefaultNames(name, plural) {
+  // default names for an item and its pronoun
+  function getDefaultNames(name, pronoun) {
     var ret = {};
-    if (plural) {
-      ret.pluralName = name;
-    } else if ((/[^aeiou]y$/i).test(name)) {
-      ret.pluralName = name.substring(0, name.length - 1) + 'ies';
-    } else if ((/(s|x|z|ch|sh)$/i).test(name)) {
-      ret.pluralName = name + 'es';
-    } else {
-      ret.pluralName = name + 's';
-    }
+    var isPlural = A.grammar.isPlural(pronoun)
+    ret.pluralName = isPlural ? name : addS(name);
     ret.keywords = [name.toLowerCase().replace(/[^a-z0-9 ]/g, '')];
     ret.definiteName = 'the ' + name;
-    ret.indefiniteName = plural ? name : ('aeiou'.indexOf(name.charAt(0).toLowerCase()) >=
+    ret.indefiniteName = isPlural ? name : ('aeiou'.indexOf(name.charAt(0).toLowerCase()) >=
       0 ? 'an ' :
       'a ') + name;
-    ret.it = plural ? 'they' : 'it';
     return ret;
   };
 
@@ -304,15 +462,14 @@ var Adventure = (function() {
         return immutableProperties;
       };
 
-      var plural = unwrap(options.plural);
-      var defaultNames = getDefaultNames(name, plural);
+      var pronoun = unwrap(options.pronoun) || 'it';
+      var defaultNames = getDefaultNames(name, pronoun);
       options.description = immutable(options.description || null);
       options.keywords = immutable(options.keywords || defaultNames.keywords);
-      options.plural = immutable('plural' in options ? options.plural : false);
       options.definiteName = immutable(options.definiteName || defaultNames.definiteName);
       options.indefiniteName = immutable(options.indefiniteName || defaultNames.indefiniteName);
       options.pluralName = immutable(options.pluralName || defaultNames.pluralName);
-      options.it = immutable(options.it || defaultNames.it);
+      options.pronoun = immutable(options.pronoun || pronoun);
       options.canBeTaken = immutable('canBeTaken' in options ? options.canBeTaken : true);
       options.location = (unwrap(options.canBeTaken) ? mutable : immutable)(options.location || null);
       options.hidden = 'hidden' in options ? mutable(options.hidden) : mutable(false);
@@ -341,6 +498,23 @@ var Adventure = (function() {
       }
       Object.defineProperty(item, 'location', o);
 
+    };
+
+    Object.keys(grammar).forEach(function(k) {
+      if (k === 'verb') return;
+      Object.defineProperty(Item.prototype, k, {
+        enumerable: true,
+        configurable: false,
+        get: function() {
+          var args = Array.from(arguments);
+          args.push(this);
+          return grammar[k].apply(null, args);
+        }
+      });
+    });
+
+    Item.prototype.verb = function(vb) {
+      return grammar.verb(vb, this);
     };
 
     Item.prototype.getExits = function() {
@@ -372,8 +546,7 @@ var Adventure = (function() {
       if (subject.location === here) {
         ret += titleCase(this.name) + '\n';
       }
-      ret += (this.description || capitalize(this.it) + (this.plural ? "'re" : "'s") + ' just ' + this.indefiniteName +
-        '.');
+      ret += (this.description || capitalize(this.theyre) + ' just ' + this.indefiniteName + '.');
 
       // describe exits with directions
       var exits = this.getExits().filter(function(ex) {
@@ -399,7 +572,7 @@ var Adventure = (function() {
               exitTypes[
                 type].multiple;
           } else {
-            ret += ' ' + capitalize(this.it) + ' ' + (this.plural ? ' have ' : ' has ');
+            ret += ' ' + capitalize(this.they) + ' ' + this.have;
             ret += exitTypes[type].directions.length == 1 ? exitTypes[type].single : exitTypes[type].multiple;
           }
           ret += ' leading ';
@@ -417,11 +590,12 @@ var Adventure = (function() {
       });
       if (items.length > 0) {
         if (subject.location === here) {
-          ret += ' ' + capitalize(series(itemNames)) + ((items.length > 1 || items[0].plural) ? ' are' : ' is') +
+          ret += ' ' + capitalize(series(itemNames)) + ' ' + ((items.length > 1) ? 'are' : items[0].are) +
             ' here.';
         } else {
-          ret += ' ' + capitalize(this.it) + ' ' + ((this instanceof Person) ? (this.plural ? 'have' : 'has') : (
-            this.plural ? 'contain' : 'contains')) + ' ' + series(itemNames) + '.';
+          ret += ' ' + capitalize(this.pronoun) + ' ' + ((this instanceof Person) ? this.have : this.verb(
+              'contain')) +
+            ' ' + series(itemNames) + '.';
         }
       }
       return ret;
@@ -607,8 +781,8 @@ var Adventure = (function() {
         options.canBeTaken = immutable(false);
       }
       options.location = mutable(options.location); // people default to mobile
-      if (!('it' in options)) {
-        options.it = immutable('she');
+      if (!('pronoun' in options)) {
+        options.pronoun = immutable('she');
       }
       options.isPerson = immutable(true);
       options.knownItems = [this];
@@ -889,20 +1063,21 @@ var Adventure = (function() {
 
       reverse.id = immutable(reverse.id || getNewId((unwrap(reverse.name) || name) + '-reverse'));
 
-      var reversePlural = ('plural' in reverse) ? unwrap(reverse.plural) : (('plural' in options) ? unwrap(options.plural) :
-        false);
+      var reversePronoun = ('pronoun' in reverse) ? unwrap(reverse.pronoun) : (('pronoun' in options) ? unwrap(
+          options.pronoun) :
+        'it');
 
       if ('name' in reverse) {
         reverse.name = immutable(reverse.name);
-        var defaultNames = getDefaultNames(unwrap(reverse.name), reversePlural);
+        var defaultNames = getDefaultNames(unwrap(reverse.name), reversePronoun);
         reverse.keywords = immutable(reverse.keywords || defaultNames.keywords);
         reverse.definiteName = immutable(reverse.definiteName || defaultNames.definiteName);
         reverse.indefiniteName = immutable(reverse.indefiniteName || defaultNames.indefiniteName);
         reverse.pluralName = immutable(reverse.pluralName || defaultNames.pluralName);
-        reverse.it = immutable(reverse.it || defaultNames.it);
+        reverse.pronoun = immutable(reverse.pronoun || defaultNames.pronoun);
       }
 
-      ['description', 'keywords', 'plural', 'definiteName', 'indefiniteName', 'pluralName', 'it', 'canBeTaken',
+      ['description', 'keywords', 'definiteName', 'indefiniteName', 'pluralName', 'pronoun', 'canBeTaken',
         'hidden',
         'unlisted'
       ].forEach(function(k) {
@@ -1022,7 +1197,7 @@ var Adventure = (function() {
     };
     Exit.prototype.beExaminedBy = function(subject) {
       if (this.description) return this.description;
-      return capitalize(this.it) + (this.plural ? "'re" : "'s") + ' ' + this.getDistinguishingName(true) + '.';
+      return capitalize(this.theyre) + ' ' + this.getDistinguishingName(true) + '.';
     };
 
     a.newExit = function(options) {
@@ -1234,7 +1409,7 @@ var Adventure = (function() {
   };
 
   // some nice defaults?
-  Adv.openableExitOptions = {
+  A.openableExitOptions = {
     open: true,
     beOpenedBy: function(subject) {
       if (this.open) return "It's already open.";
@@ -1247,13 +1422,14 @@ var Adventure = (function() {
       return "You have closed " + this.getDistinguishingName() + ".";
     },
     beUsedBy: function(subject) {
-      if (!this.open) return Adv.capitalize(this.getDistinguishingName()) +
+      if (!this.open) return A.capitalize(this.getDistinguishingName()) +
         " is closed.";
       return this.superMethod('beUsedBy')(subject);
     },
     beExaminedBy: function(subject) {
       var description = this.superMethod('beExaminedBy')(subject);
-      return description + ' ' + Adv.capitalize(this.it) + ' is ' + (this.open ? 'open' : 'closed') + '.';
+      return description + ' ' + A.capitalize(this.they) + ' ' + this.are + ' ' + (this.open ? 'open' :
+        'closed') + '.';
     },
     beUnlockedBy: function(subject) {
       return "There's no lock.";
@@ -1269,39 +1445,41 @@ var Adventure = (function() {
     }
   };
 
-  Adv.lockableExitOptions = {
+  A.lockableExitOptions = {
     unlocked: true,
     beOpenedBy: function(subject) {
-      if (this.unlocked) return Adv.openableExitOptions.beOpenedBy.call(this, subject);
-      return Adv.capitalize(this.getDistinguishingName()) + " is locked.";
+      if (this.unlocked) return A.openableExitOptions.beOpenedBy.call(this, subject);
+      return A.capitalize(this.getDistinguishingName()) + " is locked.";
     },
     beUsedBy: function(subject) {
-      if (!this.unlocked) return Adv.capitalize(this.getDistinguishingName()) +
+      if (!this.unlocked) return A.capitalize(this.getDistinguishingName()) +
         " is locked.";
-      return Adv.openableExitOptions.beUsedBy.call(this, subject);
+      return A.openableExitOptions.beUsedBy.call(this, subject);
     },
     beExaminedBy: function(subject) {
       var ret = this.superMethod('beExaminedBy')(subject);
-      ret += ' ' + Adv.capitalize(this.it) + ' is ' + (this.open ? 'open' : ('closed and ' + (this.unlocked ?
+      ret += ' ' + A.capitalize(this.they) + ' ' + they.are + ' ' + (this.open ? 'open' : ('closed and ' + (
+        this.unlocked ?
         'un' : ''))) + 'locked.';
-      ret += ' ' + Adv.capitalize(this.it) + ' ' + (this.unlocked ? '' : 'un') + 'locks from ' + (this.isForwardExit ?
-        'this' : 'the other') + ' side.';
+      ret += ' ' + A.capitalize(this.they) + ' ' + (this.unlocked ? '' : 'un') + this.verb('lock') + ' from ' +
+        (this.isForwardExit ?
+          'this' : 'the other') + ' side.';
       return ret;
     },
     beUnlockedBy: function(subject) {
-      if (this.unlocked) return "It's already unlocked.";
-      if (this.isReverseExit) return "You can't unlock it from this side.";
+      if (this.unlocked) return capitalize(this.theyre) + " already unlocked.";
+      if (this.isReverseExit) return "You can't unlock " + this.them + " from this side.";
       this.unlocked = true;
       return "You have unlocked " + this.definiteName + '.';
     },
     beLockedBy: function(subject) {
-      if (this.open) return "You have to close it first.";
-      if (!this.unlocked) return "It's already locked.";
-      if (this.isReverseExit) return "You can't lock it from this side.";
+      if (this.open) return "You have to close " + this.them + " first.";
+      if (!this.unlocked) return A.capitalize(this.theyre) + " already locked.";
+      if (this.isReverseExit) return "You can't lock " + this.them + " from this side.";
       this.unlocked = false;
       return "You have locked " + this.definiteName + '.';
     }
   };
 
-  return Adv;
+  return A;
 })();
