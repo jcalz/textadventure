@@ -5,6 +5,7 @@
 //TODO "put ___ on ____"?
 //TODO allow for multiple subjects ... major refactoring to inform all "subjects" of stuff
 // the hard part here is an easy way to switch to a "you" for when the item is the same as the addressee
+// TODO witnesses should be informed of your actions, I guess?
 //TODO maybe beTakenBy and beDroppedBy need to ask the location for permission, too?
 //TODO add timed events with some kind of 'tick' handler or some other system
 
@@ -404,6 +405,13 @@ var Adventure = (function() {
     a.itemMap = itemMap;
     a.allItems = allItems;
 
+    var allPeople = function() {
+      return allItems().filter(function(item) {
+        return item instanceof Person;
+      })
+    }
+    a.allPeople = allPeople;
+
     // KEEP A LIST OF ALL COMMANDS IN THE ADVENTURE
     var commands = [];
     a.commands = commands;
@@ -528,18 +536,22 @@ var Adventure = (function() {
 
     Item.prototype.beTakenBy = function(subject) {
       if (!this.canBeTaken) {
-        return "You can't pick up " + this.definiteName + ".";
+        tell(subject, "You can't pick up " + this.definiteName + ".");
+        return;
       }
       if (subject.has(this)) {
-        return "You already have " + this.definiteName + ".";
+        tell(subject, "You already have " + this.definiteName + ".");
+        return;
       }
       this.location = subject;
-      return "You have picked up " + this.definiteName + ".";
+      var pickedUp = " picked up " + this.definiteName + ".";
+      tell(subject, "You have" + pickedUp, subject.definiteName + ' ' + subject.has + pickedUp);
     };
 
     Item.prototype.beDroppedBy = function(subject) {
       this.location = subject.location;
-      return "You have dropped " + this.definiteName + ".";
+      var dropped = " dropped " + this.definiteName + ".";
+      tell(subject, "You have" + dropped, subject.definiteName + ' ' + subject.has + dropped);
     };
 
     Item.prototype.beExaminedBy = function(subject) {
@@ -600,7 +612,7 @@ var Adventure = (function() {
             ' ' + series(itemNames) + '.';
         }
       }
-      return ret;
+      tell(subject, ret, subject.definiteName + ' ' + subject.verb('look') + " at " + this.definiteName);
     };
 
     Item.prototype.allContents = function() {
@@ -788,9 +800,9 @@ var Adventure = (function() {
       }
       options.isPerson = immutable(true);
       options.knownItems = [this];
-      
+
       options.informationQueue = [];
-      
+
       Item.call(this, options);
 
     }
@@ -808,24 +820,57 @@ var Adventure = (function() {
     Person.prototype.isKnown = function(object) {
       return tbis.knownItems.indexOf(object) != -1;
     };
-    
-    var inform = a.inform = function(info, people) {
-        if (typeof info === 'string') {
-            var i = info;
-            info = function(){return i;};
-        }
-        if (people instanceof Person) 
-            people = [people];
-        people = people || allItmes().filter(function(item){return item instanceof Person;});
-        people.forEach(function(person){
-            if (!person.informationQueue) return;
-            var i = info(person);
-            if (i) person.informationQueue.push(i);
+
+    var tell = a.tell = function(people, infoPeople, infoNearby, infoDistant) {
+
+      if (people instanceof Person) {
+        people = [people];
+      }
+      var peopleMap = {};
+      people.forEach(function(person) {
+        peopleMap[person.id] = true;
+        person.learn(infoPeople);
+      });
+
+      if (infoNearby || infoDistant) {
+        allPeople().forEach(function(person) {
+
+          if (person.id in peopleMap) return;
+
+          var canSee = false;
+          for (var p = 0; p < people.length; p++) {
+            if (person.canSee(p)) {
+              canSee = true;
+              break;
+            }
+          }
+
+          if (canSee && infoNearby) person.learn(infoNearby);
+          if (!canSee && infoDistant) person.learn(infoDistant);
+
         });
+      }
     };
-    
-    
-    
+
+    Person.prototype.consumeInformationQueue = function() {
+      if (!this.informationQueue) return '';
+      var ret = this.informationQueue.join('\n').replace(/\n+[\b]/g, '');
+      this.informationQueue = [];
+      return ret;
+    };
+
+    Person.prototype.learn = function(info) {
+      if (!this.informationQueue) return;
+      if (typeof info === 'string') {
+        var i = info;
+        info = function() {
+          return i;
+        };
+      }
+      var i = info(this);
+      if (i) this.informationQueue.push(i);
+    };
+
     a.newPerson = function(options) {
       return new Person(options)
     };
@@ -873,20 +918,25 @@ var Adventure = (function() {
         var objectMethodName = options.command.objectMethodName || false;
         command = function(object) {
           if (object && mustHave && !this.has(object)) {
-            return "You don't have " + object.definiteName + ".";
+            tell(this, "You don't have " + object.definiteName + ".");
+            return;
           }
           if (object && mustSee && !this.canSee(object)) {
-            return "You can't see " + object.definiteName + " here.";
+            tell(this, "You can't see " + object.definiteName + " here.");
+            return;
           }
           if (!object) {
-            return youCant.replace(/%[id][0-9]*/gi, '').replace(/\s+/g, ' ');
+            tell(this, youCant.replace(/%[id][0-9]*/gi, '').replace(/\s+/g, ' '));
+            return;
           }
           if (!objectMethodName || !(objectMethodName in object)) {
-            return youCant.replace(/%[id][0-9]*/gi, object.definiteName).replace(/\s+/g, ' ');
+            tell(this, youCant.replace(/%[id][0-9]*/gi, object.definiteName).replace(/\s+/g, ' '));
+            return;
           }
           var args = Array.from(arguments);
           args[0] = this;
-          return object[objectMethodName].apply(object, args);
+          object[objectMethodName].apply(object, args);
+          return '';
         };
       } else {
         throw new Error('The command needs either a command function or command options object');
@@ -906,9 +956,10 @@ var Adventure = (function() {
       help: 'Go in the specified direction, like North or South.',
       command: function(exit) {
         if (exit.noExit) {
-          return "You can't go " + directionName(exit.direction) + " from here.";
+          tell(this, "You can't go " + directionName(exit.direction) + " from here.");
+          return;
         }
-        return this.use(exit);
+        this.use(exit);
       }
     });
 
@@ -921,7 +972,7 @@ var Adventure = (function() {
             return ex.direction == 'up';
           }) || noExit.up
         }
-        return this.go(dir);
+        this.go(dir);
       }
     });
 
@@ -931,7 +982,7 @@ var Adventure = (function() {
       help: 'Look around you.',
       command: function look() {
         this.setKnown(this.location);
-        return this.location.beExaminedBy(this);
+        this.location.beExaminedBy(this);
       }
     });
 
@@ -965,8 +1016,8 @@ var Adventure = (function() {
         }).map(function(i) {
           return i.indefiniteName;
         });
-        if (!items.length) return "You don't have anything.";
-        return "You have " + series(items) + ".";
+        var ret = (!items.length) ? "You don't have anything." : "You have " + series(items) + ".";
+        tell(this, ret);
       }
     });
 
@@ -988,7 +1039,7 @@ var Adventure = (function() {
             '');
         }).join('\n');
         ret += '\n\nThere are other commands not listed here.  Try stuff out.  Good luck!';
-        return ret;
+        tell(this, ret);
       },
       templates: ['help|h', 'help me'],
       help: 'Read these words.'
@@ -1213,13 +1264,17 @@ var Adventure = (function() {
     };
     Exit.prototype.beUsedBy = function(subject) {
       var ret = 'You use ' + this.definiteName + (this.direction ? ' leading ' + directionName(this.direction) :
-        '') + '.\n\n';
+        '') + '.\n';
       subject.location = this.destination;
-      return ret + subject.look();
+      tell(subject, ret);
+      subject.look();
     };
     Exit.prototype.beExaminedBy = function(subject) {
-      if (this.description) return this.description;
-      return capitalize(this.theyre) + ' ' + this.getDistinguishingName(true) + '.';
+      if (this.description) {
+        tell(subject, this.description);
+        return;
+      }
+      tell(subject, capitalize(this.theyre) + ' ' + this.getDistinguishingName(true) + '.');
     };
 
     a.newExit = function(options) {
@@ -1255,8 +1310,12 @@ var Adventure = (function() {
       str = str.replace(/^'\s*(.*)\s*'$/, '$1');
       var interpretation = interpretInput(subject, str);
       if (interpretation.success) {
-        return interpretation.func.apply(subject, interpretation.parameters);
+        var ret = subject.consumeInformationQueue();
+        interpretation.func.apply(subject, interpretation.parameters);        
+        ret += subject.consumeInformationQueue();
+        return ret;
       }
+
       // okay, we didn't understand.  So let's be humorous?
       if (str.length == 0) {
         if (!curBlankResponses.length) curBlankResponses = blankResponses.slice();
@@ -1434,72 +1493,101 @@ var Adventure = (function() {
   A.openableExitOptions = {
     open: true,
     beOpenedBy: function(subject) {
-      if (this.open) return "It's already open.";
+      if (this.open) {
+        tell(subject, "It's already open.");
+        return;
+      }
       this.open = true;
-      return "You have opened " + this.getDistinguishingName() + ".";
+      tell(subject, "You have opened " + this.getDistinguishingName() + ".");
     },
     beClosedBy: function(subject) {
-      if (!this.open) return "It's already closed.";
+      if (!this.open) {
+        tell(subject, "It's already closed.");
+        return;
+      }
       this.open = false;
-      return "You have closed " + this.getDistinguishingName() + ".";
+      tell(subject, "You have closed " + this.getDistinguishingName() + ".");
     },
     beUsedBy: function(subject) {
-      if (!this.open) return A.capitalize(this.getDistinguishingName()) +
-        " is closed.";
-      return this.superMethod('beUsedBy')(subject);
+      if (!this.open) {
+        tell(subject, A.capitalize(this.getDistinguishingName()) + " is closed.");
+        return;
+      }
+      this.superMethod('beUsedBy')(subject);
     },
     beExaminedBy: function(subject) {
-      var description = this.superMethod('beExaminedBy')(subject);
-      return description + ' ' + A.capitalize(this.they) + ' ' + this.are + ' ' + (this.open ? 'open' :
-        'closed') + '.';
+      this.superMethod('beExaminedBy')(subject);
+      tell(subject, '\b ' + A.capitalize(this.they) + ' ' + this.are + ' ' + (this.open ? 'open' :
+        'closed') + '.');
     },
     beUnlockedBy: function(subject) {
-      return "There's no lock.";
+      tell(subject, "There's no lock.");
     },
     beLockedBy: function(subject) {
-      return "It doesn't lock.";
+      tell(subject, "It doesn't lock.");
     },
     bePulledBy: function(subject) {
-      return (this.isForwardExit) ? this.beOpenedBy(subject) : this.beClosedBy(subject);
+      this.isForwardExit ? this.beOpenedBy(subject) : this.beClosedBy(subject);
     },
     bePushedBy: function(subject) {
-      return (this.isReverseExit) ? this.beOpenedBy(subject) : this.beClosedBy(subject);
+      this.isReverseExit ? this.beOpenedBy(subject) : this.beClosedBy(subject);
     }
   };
 
   A.lockableExitOptions = {
     unlocked: true,
     beOpenedBy: function(subject) {
-      if (this.unlocked) return A.openableExitOptions.beOpenedBy.call(this, subject);
-      return A.capitalize(this.getDistinguishingName()) + " is locked.";
+      if (this.unlocked) {
+        A.openableExitOptions.beOpenedBy.call(this, subject);
+        return;
+      }
+      tell(subject, A.capitalize(this.getDistinguishingName()) + " is locked.");
     },
     beUsedBy: function(subject) {
-      if (!this.unlocked) return A.capitalize(this.getDistinguishingName()) +
-        " is locked.";
-      return A.openableExitOptions.beUsedBy.call(this, subject);
+      if (!this.unlocked) {
+        tell(subject, A.capitalize(this.getDistinguishingName()) + " is locked.");
+        return;
+      }
+      A.openableExitOptions.beUsedBy.call(this, subject);
     },
     beExaminedBy: function(subject) {
-      var ret = this.superMethod('beExaminedBy')(subject);
-      ret += ' ' + A.capitalize(this.they) + ' ' + they.are + ' ' + (this.open ? 'open' : ('closed and ' + (
-        this.unlocked ?
-        'un' : ''))) + 'locked.';
+      this.superMethod('beExaminedBy')(subject);
+      var ret = '\b ' + A.capitalize(this.they) + ' ' + they.are + ' ' + (this.open ? 'open' : ('closed and ' +
+        (
+          this.unlocked ?
+          'un' : ''))) + 'locked.';
       ret += ' ' + A.capitalize(this.they) + ' ' + (this.unlocked ? '' : 'un') + this.verb('lock') + ' from ' +
         (this.isForwardExit ?
           'this' : 'the other') + ' side.';
-      return ret;
+      tell(subject, ret);
     },
     beUnlockedBy: function(subject) {
-      if (this.unlocked) return capitalize(this.theyre) + " already unlocked.";
-      if (this.isReverseExit) return "You can't unlock " + this.them + " from this side.";
+      if (this.unlocked) {
+        tell(subject, capitalize(this.theyre) + " already unlocked.");
+        return;
+      }
+      if (this.isReverseExit) {
+        tell(subject, "You can't unlock " + this.them + " from this side.");
+        return;
+      }
       this.unlocked = true;
-      return "You have unlocked " + this.definiteName + '.';
+      tell(subject, "You have unlocked " + this.definiteName + '.');
     },
     beLockedBy: function(subject) {
-      if (this.open) return "You have to close " + this.them + " first.";
-      if (!this.unlocked) return A.capitalize(this.theyre) + " already locked.";
-      if (this.isReverseExit) return "You can't lock " + this.them + " from this side.";
+      if (this.open) {
+        tell(subject, "You have to close " + this.them + " first.");
+        return;
+      }
+      if (!this.unlocked) {
+        tell(subject, A.capitalize(this.theyre) + " already locked.");
+        return;
+      }
+      if (this.isReverseExit) {
+        tell(subject, "You can't lock " + this.them + " from this side.");
+        return;
+      }
       this.unlocked = false;
-      return "You have locked " + this.definiteName + '.';
+      tell(subject, "You have locked " + this.definiteName + '.');
     }
   };
 

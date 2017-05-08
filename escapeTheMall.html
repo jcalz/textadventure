@@ -279,9 +279,13 @@
             var ret;
             if (i === 'yes') {
               adventure.deserialize(previouslySavedState);
-              ret = '\n' + 'Okay, continuing the previous game...\n\n' + you.look();
+              ret = '\n' + 'Okay, continuing the previous game...\n\n';
+              you.look();
+              ret += you.consumeInformationQueue();
             } else {
-              ret = '\nOkay, starting a new game...\n\n' + you.start();
+              ret = '\nOkay, starting a new game...\n\n';
+              you.start();
+              ret += you.consumeInformationQueue();
               localStorage.removeItem(autosaveKey);
             }
             processInputNormally();
@@ -289,9 +293,9 @@
           });
           return false;
         });
-
       } else {
-        output('\n' + you.start());
+        you.start();
+        output('\n' + you.consumeInformationQueue());
         processInputNormally();
       }
 
@@ -302,6 +306,7 @@
     ///////////// SPECIFIC STUFF /////////////////
     var A = Adventure;
     var adventure = A.newAdventure();
+    var tell = adventure.tell;
 
     // silly template language: 
     // "use %i1" means "use" followed by an ITEM, to be passed as FIRST parameter to the function.
@@ -399,8 +404,9 @@
       started = true;
       ret +=
         "It is a warm, sunny day.  You are going to the mall by yourself.  You go to a clothing store and fall asleep while changing.\n";
-      ret += "You wake up hours later.\n\n";
-      return ret + you.look();
+      ret += "You wake up hours later.\n";
+      you.learn(ret);
+      you.look();
     };
 
     // PLACES
