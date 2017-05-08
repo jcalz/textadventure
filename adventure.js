@@ -3,7 +3,9 @@
 //TODO maybe ambiguous items should be a warning error rather than first-found?
 //TODO "jump"
 //TODO "put ___ on ____"?
-//TODO allow for multiple subjects 
+//TODO allow for multiple subjects ... major refactoring to inform all "subjects" of stuff
+// the hard part here is an easy way to switch to a "you" for when the item is the same as the addressee
+//TODO maybe beTakenBy and beDroppedBy need to ask the location for permission, too?
 //TODO add timed events with some kind of 'tick' handler or some other system
 
 var Adventure = (function() {
@@ -786,6 +788,9 @@ var Adventure = (function() {
       }
       options.isPerson = immutable(true);
       options.knownItems = [this];
+      
+      options.informationQueue = [];
+      
       Item.call(this, options);
 
     }
@@ -803,7 +808,24 @@ var Adventure = (function() {
     Person.prototype.isKnown = function(object) {
       return tbis.knownItems.indexOf(object) != -1;
     };
-
+    
+    var inform = a.inform = function(info, people) {
+        if (typeof info === 'string') {
+            var i = info;
+            info = function(){return i;};
+        }
+        if (people instanceof Person) 
+            people = [people];
+        people = people || allItmes().filter(function(item){return item instanceof Person;});
+        people.forEach(function(person){
+            if (!person.informationQueue) return;
+            var i = info(person);
+            if (i) person.informationQueue.push(i);
+        });
+    };
+    
+    
+    
     a.newPerson = function(options) {
       return new Person(options)
     };
