@@ -387,25 +387,24 @@
     });
 
     var you = {};
-    you.id = 'you';
-    you.name = 'you';
-    you.keywords = ['me', 'myself', 'I'];
-    you.unlisted = true;
-    you.pronoun = 'you';
-    you.pluralName = 'you';
+    you.id = 'adventurer';
+    you.name = 'Ms. Adventurer';
+    you.keywords = ['adventurer'];
+    you.pronoun = 'she';
     you = adventure.newPerson(you);
 
     var genericBePutIntoBy = function(subject, item) {
+      var itemName = subject.orYourself(item);
       if (!subject.has(item)) {
-        tell(subject, "You don't have " + item.definiteName + ".");
+        tell(subject, "You don't have " + itemName + ".");
         return;
       }
       item.location = this;
       if (subject.location == this) {
-        tell(subject, "You have dropped " + item.definiteName + ".");
+        tell(subject, "You have dropped " + itemName + ".");
         return;
       }
-      tell(subject, "You have put " + item.definiteName + " in " + this.definiteName + ".");
+      tell(subject, "You have put " + itemName + " in " + subject.orYourself(this) + ".");
       return;
     };
     adventure.addPlaceMethod('bePutIntoBy', genericBePutIntoBy);
@@ -492,16 +491,18 @@
     }
     canOpener.keywords = ['can opener', 'opener'];
     canOpener.beUsedBy = function(subject, object) {
+      var opener = this;
+
       if (!object) {
         if (subject.has(soup)) {
           subject.open(soup, this);
           return;
         }
         if (!subject.has(this)) {
-          tell(subject, "You don't have " + this.definiteName + ".");
+          tell(subject, "You don't have " + opener.definiteName + ".");
           return;
         }
-        tell(subject, "You can't use " + this.definiteName + " now.");
+        tell(subject, "You can't use " + opener.definiteName + " now.");
         return;
       }
       subject.open(object, this);
@@ -532,28 +533,30 @@
       tell(subject, ret);
     };
     soup.beOpenedBy = function(subject, instrument) {
+      var soup = this;
       if (!subject.has(this)) {
-        tell(subject, "You don't have " + this.definiteName + ".");
+        tell(subject, "You don't have " + soup.definiteName + ".");
         return;
       }
       if (!this.closed) {
-        tell(subject, A.capitalize(this.definiteName) + " has already been opened.");
+        tell(subject, A.capitalize(soup.definiteName) + " has already been opened.");
         return;
       }
       if (!instrument) {
         tell(subject, "You try to rip the soup can open with your bare hands, but you can't.");
         return;
       }
+      var instrumentName = subject.orYourself(instrument);
       if (instrument !== canOpener) {
-        tell(subject, "You can't use " + instrument.definiteName + " to open " + this.definiteName + ".");
+        tell(subject, "You can't use " + instrumentName + " to open " + soup.definiteName + ".");
         return;
       }
       if (!subject.has(instrument)) {
-        tell(subject, "You don't have " + instrument.definiteName + ".");
+        tell(subject, "You don't have " + instrumentName + ".");
         return;
       }
       this.closed = false;
-      tell(subject, "You successfully use " + instrument.definiteName + " to open " + this.definiteName + ".");
+      tell(subject, "You successfully use " + instrumentName + " to open " + subject.orYourself(this) + ".");
       return;
     }
     soup.beReadBy = function(subject) {
@@ -568,23 +571,23 @@
     };
     soup.beUsedBy = function(subject, instrument) {
       if (!subject.has(this)) {
-        tell(subject, "You don't have " + this.definiteName + ".");
+        tell(subject, "You don't have " + soup.definiteName + ".");
         return;
       }
       if (this.closed) {
-        tell(subject, this.beOpenedBy(subject, instrument));
+        this.beOpenedBy(subject, instrument);
         return;
       }
       if (!this.full) {
         tell(subject, "You can't use the empty soup can.");
         return;
       }
-      tell(subject, this.beEatenBy(subject, instrument));
+      this.beEatenBy(subject, instrument);
       return;
     };
     soup.beEatenBy = function(subject) {
       if (!subject.has(this)) {
-        tell(subject, "You have to pick up " + this.definiteName + " to eat it.");
+        tell(subject, "You have to pick up " + soup.definiteName + " to eat it.");
         return;
       }
       if (this.closed) {
@@ -692,7 +695,7 @@
         return;
       }
       if (!subject.canSee(object)) {
-        tell(subject, "You can't see " + object.definiteName + ".");
+        tell(subject, "You can't see " + subject.orYourself(object) + ".");
         return;
       }
       if (object === cabinet) {
@@ -703,7 +706,7 @@
         tell(subject, "The cabinet is already unlocked.");
         return;
       }
-      tell(subject, "You try to use the key on " + object.definiteName + " but it doesn't do anything.");
+      tell(subject, "You try to use the key on " + subject.orYourself(object) + " but it doesn't do anything.");
       return;
     }
     key.location = teddyBear;
@@ -723,7 +726,7 @@
       } else {
         ret += ' It is open ';
         var items = cabinet.listContents(subject).map(function(it) {
-          return it.indefiniteName;
+          return subject.orYourself(it, it.indefiniteName, 'you');
         });
         if (items.length == 0) {
           ret += 'and empty.';
@@ -732,7 +735,6 @@
         }
       }
       tell(subject, ret);
-      return;
     };
     cabinet.beOpenedBy = cabinet.beUnlockedBy = cabinet.bePulledBy = function(subject, instrument) {
       if (!cabinet.closed) {
@@ -752,11 +754,12 @@
         return;
       }
       if (!subject.has(instrument)) {
-        tell(subject, "You don't have " + instrument.definiteName + ".");
+        tell(subject, "You don't have " + subject.orYourself(instrument) + ".");
         return;
       }
       if (instrument !== key) {
-        tell(subject, "You try to unlock the cabinet with " + instrument.definiteName + " but it remains locked.");
+        tell(subject, "You try to unlock the cabinet with " + subject.orYourself(instrument) +
+          " but it remains locked.");
         return;
       }
       cabinet.locked = false;

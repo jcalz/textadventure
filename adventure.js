@@ -244,8 +244,8 @@ var Adventure = (function() {
     return obj;
   }
 
-  function enforceItemPropertyImmutability(item, options) {
-    var immutableProperties = {};
+  function setOptions(item, options) {
+    var immutableProperties = item.getImmutableProperties();
     Object.keys(options).forEach(function(prop) {
       var v = options[prop];
       var immutable = false;
@@ -258,17 +258,19 @@ var Adventure = (function() {
       }
       item[prop] = v;
     });
+  }
 
-    var o = {
-      configurable: false,
-      enumerable: true,
-      writable: false
-    };
-    // make immutable properties immutable
-    Object.keys(immutableProperties).forEach(function(prop) {
-      Object.defineProperty(item, prop, o);
+  function enforceImmutables(item) {
+    Object.keys(item.getImmutableProperties()).forEach(function(prop) {
+      var desc = Object.getOwnPropertyDescriptor(item, prop) || {
+        enumerable: true
+      };
+      desc.configurable = false;
+      if (desc.set) desc.set = undefined;
+      if (!desc.get) desc.writable = false;
+      Object.defineProperty(item, prop, desc);
     });
-    return immutableProperties;
+
   }
 
   // default names for an item and its pronoun
@@ -443,7 +445,7 @@ var Adventure = (function() {
     };
     a.deserialize = deserialize;
 
-    function Item(options) {
+    function Item(options, noEnforceImmutables) {
       var item = this;
       this.adventure = a;
       if (typeof options === 'string') {
@@ -486,27 +488,25 @@ var Adventure = (function() {
       options.unlisted = immutable('unlisted' in options ? options.unlisted : false);
       options.isItem = immutable(true);
 
-      var location = options.location;
-      delete options.location;
-      immutableProperties = enforceItemPropertyImmutability(item, options);
-      if ((location instanceof MutabilityMarker) && !(location.mutable)) immutableProperties.location = true;
-      location = unwrap(location);
+      setOptions(item, options);
+
+      var location = this.location;
       var o = {
-        configurable: false,
+        configurable: true,
         enumerable: true,
         get: function() {
           var ret = location;
           if (typeof location === 'string') ret = itemMap[location];
           if (!ret) ret = null;
           return ret;
+        },
+        set: function(l) {
+          location = l;
         }
       };
-      if (!immutableProperties.location) {
-        o.set = function(l) {
-          location = l;
-        };
-      }
       Object.defineProperty(item, 'location', o);
+
+      if (!noEnforceImmutables) enforceImmutables(item);
 
     };
 
@@ -535,35 +535,39 @@ var Adventure = (function() {
     };
 
     Item.prototype.beTakenBy = function(subject) {
+      var item = this;
+      var itemName = subject.orYourself(item);
       if (!this.canBeTaken) {
-        tell(subject, "You can't pick up " + this.definiteName + ".");
+        tell(subject, "You can't pick up " + itemName + ".");
         return;
       }
       if (subject.has(this)) {
-        tell(subject, "You already have " + this.definiteName + ".");
+        tell(subject, "You already have " + itemName + ".");
         return;
       }
       this.location = subject;
-      var pickedUp = " picked up " + this.definiteName + ".";
-      tell(subject, "You have" + pickedUp, subject.definiteName + ' ' + subject.has + pickedUp);
+      tell(subject, "You have picked up " + itemName + ".");
     };
 
     Item.prototype.beDroppedBy = function(subject) {
       this.location = subject.location;
-      var dropped = " dropped " + this.definiteName + ".";
-      tell(subject, "You have" + dropped, subject.definiteName + ' ' + subject.has + dropped);
+
+      tell(subject, "You have dropped " + subject.orYoureself(item) + ".");
     };
 
     Item.prototype.beExaminedBy = function(subject) {
-      var here = this;
+      var item = this;
       var ret = '';
-      if (subject.location === here) {
-        ret += titleCase(this.name) + '\n';
+
+      if (subject.location === item) {
+        ret += titleCase(item.name) + '\n';
       }
-      ret += (this.description || capitalize(this.theyre) + ' just ' + this.indefiniteName + '.');
+
+      ret += item.description || (subject.orYourself(item, capitalize(item.theyre), "You're") + ' just ' +
+        subject.orYourself(item, item.indefiniteName) + '.');
 
       // describe exits with directions
-      var exits = this.getExits().filter(function(ex) {
+      var exits = item.getExits().filter(function(ex) {
         return ex.direction;
       });
       if (exits.length > 0) {
@@ -580,13 +584,13 @@ var Adventure = (function() {
           exitTypes[type].directions.push(directionName(ex.direction));
         });
         Object.keys(exitTypes).forEach(function(type) {
-          if (subject.location === here) {
+          if (subject.location === item) {
             ret += ' There ';
             ret += exitTypes[type].directions.length == 1 ? 'is ' + exitTypes[type].single : 'are ' +
               exitTypes[
                 type].multiple;
           } else {
-            ret += ' ' + capitalize(this.they) + ' ' + this.have;
+            ret += ' ' + capitalize(item.they) + ' ' + item.have;
             ret += exitTypes[type].directions.length == 1 ? exitTypes[type].single : exitTypes[type].multiple;
           }
           ret += ' leading ';
@@ -595,24 +599,27 @@ var Adventure = (function() {
         });
       }
 
-      // describe non-exits or exits with no direction
-      var items = this.listContents(subject).filter(function(it) {
-        return (!(it instanceof Exit) || (!it.direction));
+      // describe non-exits or exits with no direction, but not the subject
+      var items = item.listContents(subject).filter(function(it) {
+        return (!(it instanceof Exit) || (!it.direction)) && it !== subject;
       });
       var itemNames = items.map(function(it) {
-        return it.indefiniteName;
+        return subject.orYourself(it, it.indefiniteName, 'you');
       });
       if (items.length > 0) {
-        if (subject.location === here) {
+        if (subject.location === item) {
           ret += ' ' + capitalize(series(itemNames)) + ' ' + ((items.length > 1) ? 'are' : items[0].are) +
             ' here.';
         } else {
-          ret += ' ' + capitalize(this.pronoun) + ' ' + ((this instanceof Person) ? this.have : this.verb(
-              'contain')) +
+          ret += ' ' + subject.orYourself(item, capitalize(item.pronoun), 'You') + ' ' + ((item instanceof Person) ?
+              subject.orYourself(item, item.have, 'have') : item.verb(
+                'contain')) +
             ' ' + series(itemNames) + '.';
         }
       }
-      tell(subject, ret, subject.definiteName + ' ' + subject.verb('look') + " at " + this.definiteName);
+
+      tell(subject, ret);
+      // OTHERS, function(){return capitalize(subject.definiteName) + " " + subject.verb('look') + ' at ' + item.definiteName;});
     };
 
     Item.prototype.allContents = function() {
@@ -803,7 +810,28 @@ var Adventure = (function() {
 
       options.informationQueue = [];
 
-      Item.call(this, options);
+      Item.call(this, options, true);
+
+      // make some changes here
+      var person = this;
+      ['name', 'definiteName', 'indefiniteName', 'pronoun'].forEach(function(prop) {
+
+        var p = person[prop];
+
+        Object.defineProperty(person, prop, {
+          configurable: true,
+          enumerable: true,
+          get: function() {
+            return (a.you === person) ? 'you' : p;
+          },
+          set: function(v) {
+            p = v;
+          }
+        });
+
+      });
+
+      enforceImmutables(this);
 
     }
 
@@ -818,7 +846,7 @@ var Adventure = (function() {
     };
 
     Person.prototype.isKnown = function(object) {
-      return tbis.knownItems.indexOf(object) != -1;
+      return this.knownItems.indexOf(object) != -1;
     };
 
     var tell = a.tell = function(people, infoPeople, infoNearby, infoDistant) {
@@ -854,22 +882,35 @@ var Adventure = (function() {
 
     Person.prototype.consumeInformationQueue = function() {
       if (!this.informationQueue) return '';
-      var ret = this.informationQueue.join('\n').replace(/\n+[\b]/g, '');
+      var ret = this.informationQueue.join('\n').replace(/\n+[\b]/g, '') + '\n';
       this.informationQueue = [];
       return ret;
     };
 
     Person.prototype.learn = function(info) {
       if (!this.informationQueue) return;
+
       if (typeof info === 'string') {
         var i = info;
         info = function() {
           return i;
         };
       }
-      var i = info(this);
+      var i;
+      try {
+        a.you = this;
+        i = info(this);
+      } finally {
+        a.you = null;
+      }
       if (i) this.informationQueue.push(i);
     };
+
+    Person.prototype.orYourself = function(item, name, youName) {
+      name = name || item.definiteName;
+      if (this !== item) return name;
+      return youName || 'yourself';
+    }
 
     a.newPerson = function(options) {
       return new Person(options)
@@ -917,12 +958,14 @@ var Adventure = (function() {
         var mustHave = !!options.command.mustHave; // default false
         var objectMethodName = options.command.objectMethodName || false;
         command = function(object) {
+          var subject = this;
+          var objectName = this.orYourself(object);
           if (object && mustHave && !this.has(object)) {
-            tell(this, "You don't have " + object.definiteName + ".");
+            tell(this, "You don't have " + objectName + ".");
             return;
           }
           if (object && mustSee && !this.canSee(object)) {
-            tell(this, "You can't see " + object.definiteName + " here.");
+            tell(this, "You can't see " + objectName + " here.");
             return;
           }
           if (!object) {
@@ -930,7 +973,7 @@ var Adventure = (function() {
             return;
           }
           if (!objectMethodName || !(objectMethodName in object)) {
-            tell(this, youCant.replace(/%[id][0-9]*/gi, object.definiteName).replace(/\s+/g, ' '));
+            tell(this, youCant.replace(/%[id][0-9]*/gi, objectName).replace(/\s+/g, ' '));
             return;
           }
           var args = Array.from(arguments);
@@ -1106,148 +1149,148 @@ var Adventure = (function() {
 
       var reverse = unwrap(options.reverse);
 
-      var exit = this;
+      if (reverse) {
 
-      function makeThisAnItem() {
-        Item.call(exit, options);
-        if (destinationImmutable) exit.getImmutableProperties().destination = true;
-      }
+        delete options.reverse;
 
-      if (!reverse) {
-        makeThisAnItem();
-        return;
-      }
+        if (reverse === true) {
+          reverse = {};
+        } else if (typeof reverse == 'string') {
+          reverse = {
+            direction: reverse
+          };
+        }
 
-      delete options.reverse;
+        reverse.direction = immutable(reverse.direction || (directions[unwrap(options.direction)] || {}).oppositeId);
 
-      if (reverse === true) {
-        reverse = {};
-      } else if (typeof reverse == 'string') {
-        reverse = {
-          direction: reverse
+        if (('id' in reverse) && (unwrap(reverse.id) in itemMap)) throw new Error('Cannot reuse id ' + unwrap(
+            reverse
+            .id) +
+          ' for reverse.id');
+
+        reverse.id = immutable(reverse.id || getNewId((unwrap(reverse.name) || name) + '-reverse'));
+
+        var reversePronoun = ('pronoun' in reverse) ? unwrap(reverse.pronoun) : (('pronoun' in options) ? unwrap(
+            options.pronoun) :
+          'it');
+
+        if ('name' in reverse) {
+          reverse.name = immutable(reverse.name);
+          var defaultNames = getDefaultNames(unwrap(reverse.name), reversePronoun);
+          reverse.keywords = immutable(reverse.keywords || defaultNames.keywords);
+          reverse.definiteName = immutable(reverse.definiteName || defaultNames.definiteName);
+          reverse.indefiniteName = immutable(reverse.indefiniteName || defaultNames.indefiniteName);
+          reverse.pluralName = immutable(reverse.pluralName || defaultNames.pluralName);
+          reverse.pronoun = immutable(reverse.pronoun || defaultNames.pronoun);
+        }
+
+        ['description', 'keywords', 'definiteName', 'indefiniteName', 'pluralName', 'pronoun', 'canBeTaken',
+          'hidden',
+          'unlisted'
+        ].forEach(function(k) {
+          if (k in reverse) reverse[k] = immutable(reverse[k]);
+        });
+
+        // unchangable options
+        options.isForwardExit = immutable(true);
+        options.isReverseExit = immutable(false);
+        reverse.isForwardExit = immutable(false);
+        reverse.isReverseExit = immutable(true);
+        options.forwardExit = immutable(this);
+
+        var reverseExit = Object.create(this);
+
+        options.reverseExit = immutable(reverseExit);
+
+        if ('location' in reverse) throw new Error(
+          'Do not specify location of reverse exit; it will automatically be the same as the exit destination');
+        if ('destination' in reverse) throw new Error(
+          'Do not specify destination of reverse exit; it will automatically be the same as the exit location');
+
+        var immutableProperties = {};
+        reverse.getImmutableProperties = function() {
+          return immutableProperties;
         };
+        setOptions(reverse, reverse);
+        enforceImmutables(reverse);
+        // as of now, reverse is an object holding onto these properties
+
       }
 
-      reverse.direction = immutable(reverse.direction || (directions[unwrap(options.direction)] || {}).oppositeId);
+      Item.call(this, options);
+      if (destinationImmutable) this.getImmutableProperties().destination = true;
 
-      if (('id' in reverse) && (unwrap(reverse.id) in itemMap)) throw new Error('Cannot reuse id ' + unwrap(reverse
-          .id) +
-        ' for reverse.id');
+      if (reverse) {
 
-      reverse.id = immutable(reverse.id || getNewId((unwrap(reverse.name) || name) + '-reverse'));
+        itemMap[reverse.id] = reverseExit;
 
-      var reversePronoun = ('pronoun' in reverse) ? unwrap(reverse.pronoun) : (('pronoun' in options) ? unwrap(
-          options.pronoun) :
-        'it');
+        var forwardExit = this;
+        reverse.serialize = this.serialize.bind(reverse);
+        reverse.deserialize = this.deserialize.bind(reverse);
+        reverse.getImmutableProperties = function() {
+          return immutableProperties;
+        };
 
-      if ('name' in reverse) {
-        reverse.name = immutable(reverse.name);
-        var defaultNames = getDefaultNames(unwrap(reverse.name), reversePronoun);
-        reverse.keywords = immutable(reverse.keywords || defaultNames.keywords);
-        reverse.definiteName = immutable(reverse.definiteName || defaultNames.definiteName);
-        reverse.indefiniteName = immutable(reverse.indefiniteName || defaultNames.indefiniteName);
-        reverse.pluralName = immutable(reverse.pluralName || defaultNames.pluralName);
-        reverse.pronoun = immutable(reverse.pronoun || defaultNames.pronoun);
-      }
-
-      ['description', 'keywords', 'definiteName', 'indefiniteName', 'pluralName', 'pronoun', 'canBeTaken',
-        'hidden',
-        'unlisted'
-      ].forEach(function(k) {
-        if (k in reverse) reverse[k] = immutable(reverse[k]);
-      });
-
-      // unchangable options
-      options.isForwardExit = immutable(true);
-      options.isReverseExit = immutable(false);
-      reverse.isForwardExit = immutable(false);
-      reverse.isReverseExit = immutable(true);
-      options.forwardExit = immutable(this);
-
-      var proxyType = function() {};
-      proxyType.prototype = this;
-      var reverseExit = new proxyType();
-
-      options.reverseExit = immutable(reverseExit);
-
-      if ('location' in reverse) throw new Error(
-        'Do not specify location of reverse exit; it will automatically be the same as the exit destination');
-      if ('destination' in reverse) throw new Error(
-        'Do not specify destination of reverse exit; it will automatically be the same as the exit location');
-
-      var immutableProperties = enforceItemPropertyImmutability(reverse, reverse);
-      // as of now, reverse is an object holding onto these properties
-
-      makeThisAnItem();
-
-      itemMap[reverse.id] = reverseExit;
-
-      var forwardExit = this;
-      reverse.serialize = this.serialize.bind(reverse);
-      reverse.deserialize = this.deserialize.bind(reverse);
-      reverse.getImmutableProperties = function() {
-        return immutableProperties;
-      };
-
-      Object.defineProperty(reverseExit, 'location', {
-        enumerable: true,
-        configurable: false,
-        get: function() {
-          return forwardExit.destination;
-        },
-        set: function(v) {
-          forwardExit.destination = v;
-        }
-      });
-      Object.defineProperty(reverseExit, 'destination', {
-        enumerable: true,
-        configurable: false,
-        get: function() {
-          return forwardExit.location;
-        },
-        set: function(v) {
-          forwardExit.location = v;
-        }
-      });
-
-      var mergedKeyObj = {};
-      Object.keys(this).forEach(function(k) {
-        mergedKeyObj[k] = true;
-      });
-      Object.keys(reverse).forEach(function(k) {
-        mergedKeyObj[k] = true;
-      });
-
-      Object.keys(mergedKeyObj).forEach(function(k) {
-        if ((k == 'location') || (k == 'destination')) return;
-        var get;
-        var set;
-        if (k in reverse) {
-          get = function() {
-            return reverse[k];
-          };
-          set = function(v) {
-            reverse[k] = v;
-          };
-        } else {
-          get = function() {
-            return forwardExit[k];
-          };
-          set = function(v) {
-            forwardExit[k] = v;
-          };
-        }
-
-        Object.defineProperty(reverseExit, k, {
+        Object.defineProperty(reverseExit, 'location', {
           enumerable: true,
           configurable: false,
-          get: get,
-          set: set
+          get: function() {
+            return forwardExit.destination;
+          },
+          set: function(v) {
+            forwardExit.destination = v;
+          }
         });
-      });
+        Object.defineProperty(reverseExit, 'destination', {
+          enumerable: true,
+          configurable: false,
+          get: function() {
+            return forwardExit.location;
+          },
+          set: function(v) {
+            forwardExit.location = v;
+          }
+        });
 
-      Object.seal(reverseExit);
+        var mergedKeyObj = {};
+        Object.keys(this).forEach(function(k) {
+          mergedKeyObj[k] = true;
+        });
+        Object.keys(reverse).forEach(function(k) {
+          mergedKeyObj[k] = true;
+        });
 
+        Object.keys(mergedKeyObj).forEach(function(k) {
+          if ((k == 'location') || (k == 'destination')) return;
+          var get;
+          var set;
+          if (k in reverse) {
+            get = function() {
+              return reverse[k];
+            };
+            set = function(v) {
+              reverse[k] = v;
+            };
+          } else {
+            get = function() {
+              return forwardExit[k];
+            };
+            set = function(v) {
+              forwardExit[k] = v;
+            };
+          }
+
+          Object.defineProperty(reverseExit, k, {
+            enumerable: true,
+            configurable: false,
+            get: get,
+            set: set
+          });
+        });
+
+        Object.seal(reverseExit);
+
+      }
     }
     Exit.prototype = Object.create(Item.prototype);
     Exit.prototype.getDistinguishingName = function(indefinite) {
@@ -1311,8 +1354,9 @@ var Adventure = (function() {
       var interpretation = interpretInput(subject, str);
       if (interpretation.success) {
         var ret = subject.consumeInformationQueue();
-        interpretation.func.apply(subject, interpretation.parameters);        
+        interpretation.func.apply(subject, interpretation.parameters);
         ret += subject.consumeInformationQueue();
+        ret = ret.trim();
         return ret;
       }
 
@@ -1414,8 +1458,13 @@ var Adventure = (function() {
       }
       // see if it matches any of the item's keywords
       str = str.toLowerCase().replace(/^(the|a|an) /i, '').trim(); // strip off articles
-      for (var i = 0; i < item.keywords.length; i++) {
-        if (str === item.keywords[i].toLowerCase())
+      var kw = item.keywords;
+      // the word "me" or "myself" can refer to the speaker
+      if (subject === item) {
+        kw = kw.concat(['me', 'myself', 'i']);
+      }
+      for (var i = 0; i < kw.length; i++) {
+        if (str === kw[i].toLowerCase())
           return true;
       }
       return false; // didn't match any keywords or direction... it's not a match.
@@ -1498,7 +1547,7 @@ var Adventure = (function() {
         return;
       }
       this.open = true;
-      tell(subject, "You have opened " + this.getDistinguishingName() + ".");
+      tell(subject, "You have opened " + e.getDistinguishingName() + ".");
     },
     beClosedBy: function(subject) {
       if (!this.open) {
@@ -1510,6 +1559,7 @@ var Adventure = (function() {
     },
     beUsedBy: function(subject) {
       if (!this.open) {
+        var exit = this;
         tell(subject, A.capitalize(this.getDistinguishingName()) + " is closed.");
         return;
       }
@@ -1517,6 +1567,7 @@ var Adventure = (function() {
     },
     beExaminedBy: function(subject) {
       this.superMethod('beExaminedBy')(subject);
+      var exit = this;
       tell(subject, '\b ' + A.capitalize(this.they) + ' ' + this.are + ' ' + (this.open ? 'open' :
         'closed') + '.');
     },
