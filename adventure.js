@@ -85,6 +85,15 @@ var Adventure = (function() {
     it: 'is',
     they: 'are'
   });
+  var were = gram({
+    i: 'was',
+    we: 'were',
+    you: 'were',
+    he: 'was',
+    she: 'was',
+    it: 'was',
+    they: 'were'
+  });
   var have = gram({
     i: 'have',
     we: 'have',
@@ -126,6 +135,7 @@ var Adventure = (function() {
     if (typeof vb !== 'string') return '';
     var vbl = vb.toLowerCase();
     if (vbl == 'are') return are(nom);
+    if (vbl == 'were') return were(nom);
     if (vbl == 'have') return have(nom);
     if (vbl === 're') return re(nom);
     if (vbl === 've') return ve(nom);
@@ -184,6 +194,7 @@ var Adventure = (function() {
     }),
     verb: verb,
     are: are,
+    were: were,
     have: have,
     re: re,
     ve: ve,
