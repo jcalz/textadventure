@@ -968,6 +968,7 @@ var Adventure = (function() {
         var mustSee = ('mustSee' in options.command) ? !!options.command.mustSee : true; // default true
         var mustHave = !!options.command.mustHave; // default false
         var objectMethodName = options.command.objectMethodName || false;
+        var locationPermissionMethodName = options.command.locationPermissionMethodName || 'permitsPossession';
         command = function(object) {
           var subject = this;
           var objectName = this.orYourself(object);
@@ -983,10 +984,15 @@ var Adventure = (function() {
             tell(this, youCant.replace(/%[id][0-9]*/gi, '').replace(/\s+/g, ' '));
             return;
           }
+          if (object.location && locationPermissionMethodName in object.location) {
+            if (!(object.location[locationPermissionMethodName](subject,object))) {
+              return; // it's up to the object to enforce permissions
+            }
+          }
           if (!objectMethodName || !(objectMethodName in object)) {
             tell(this, youCant.replace(/%[id][0-9]*/gi, objectName).replace(/\s+/g, ' '));
             return;
-          }
+          }          
           var args = Array.from(arguments);
           args[0] = this;
           object[objectMethodName].apply(object, args);
