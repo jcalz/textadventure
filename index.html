@@ -378,36 +378,21 @@
         objectMethodName: "bePulledBy"
       }
     });
+
+    var give = adventure.getCommand('give');
     adventure.newCommand({
       methodName: "putInto",
-      templates: ["put|place %i2 into|in|inside %i1"],
-      command: {
-        objectMethodName: "bePutIntoBy"
+      templates: ["put|place %i1 into|in|inside %i2"],
+      command: function(item, loc) {
+        give.call(this, item, loc);
       }
     });
-
     var you = {};
     you.id = 'adventurer';
     you.name = 'Ms. Adventurer';
     you.keywords = ['adventurer'];
     you.pronoun = 'she';
     you = adventure.newPerson(you);
-
-    var genericBePutIntoBy = function(subject, item) {
-      var itemName = subject.orYourself(item);
-      if (!subject.has(item)) {
-        tell(subject, "You don't have " + itemName + ".");
-        return;
-      }
-      item.location = this;
-      if (subject.location == this) {
-        tell(subject, "You have dropped " + itemName + ".");
-        return;
-      }
-      tell(subject, "You have put " + itemName + " in " + subject.orYourself(this) + ".");
-      return;
-    };
-    adventure.addPlaceMethod('bePutIntoBy', genericBePutIntoBy);
 
     // PLACES
     var room = {
@@ -782,13 +767,21 @@
       tell(subject, "You have closed the cabinet.");
       return;
     };
-    cabinet.bePutIntoBy = function(subject, item) {
-      if (cabinet.closed) {
-        tell(subject, "You can't do that.  The cabinet is closed.");
-        return;
+    cabinet.beAskedToTake = function(item, subject, doTell) {
+      if (!cabinet.closed) {
+        if (doTell) tell(subject, "You have put " + item.definiteName + " into the cabinet.");
+        return true;
       }
-      genericBePutIntoBy.call(this, subject, item);
-    }
+      if (doTell) tell(subject, "You can't do that.  The cabinet is closed.");
+      return false;
+    };
+    cabinet.beAskedToGive = function(item, subject, doTell) {
+      if (!cabinet.closed) {
+        return cabinet.superMethod('beAskedToGive')(item, subject, doTell);
+      }
+      if (doTell) tell(subject, "You can't do that.  The cabinet is closed.");
+      return false;
+    };
     cabinet.location = bedroom;
     cabinet = adventure.newItem(cabinet);
 

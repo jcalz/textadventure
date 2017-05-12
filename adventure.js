@@ -3,10 +3,7 @@
 //TODO maybe ambiguous items should be a warning error rather than first-found?
 //TODO "jump"
 //TODO "put ___ on ____"?
-//TODO allow for multiple subjects ... major refactoring to inform all "subjects" of stuff
-// the hard part here is an easy way to switch to a "you" for when the item is the same as the addressee
 // TODO witnesses should be informed of your actions, I guess?
-//TODO maybe beTakenBy and beDroppedBy need to ask the location for permission, too?
 //TODO add timed events with some kind of 'tick' handler or some other system
 
 var Adventure = (function() {
@@ -417,6 +414,9 @@ var Adventure = (function() {
     }
     a.itemMap = itemMap;
     a.allItems = allItems;
+    a.getItem = function(id) {
+      return itemMap[id];
+    };
 
     var allPeople = function() {
       return allItems().filter(function(item) {
@@ -428,6 +428,12 @@ var Adventure = (function() {
     // KEEP A LIST OF ALL COMMANDS IN THE ADVENTURE
     var commands = [];
     a.commands = commands;
+
+    a.getCommand = function(name) {
+      return commands.find(function(command) {
+        return command.methodName == name;
+      });
+    };
 
     // serialize adventure
     var serialize = function() {
@@ -546,8 +552,9 @@ var Adventure = (function() {
     };
 
     Item.prototype.beTakenBy = function(subject) {
-      var item = this;
-      var itemName = subject.orYourself(item);
+      if (!this.location) return; // weird
+
+      var itemName = subject.orYourself(this);
       if (!this.canBeTaken) {
         tell(subject, "You can't pick up " + itemName + ".");
         return;
@@ -556,15 +563,46 @@ var Adventure = (function() {
         tell(subject, "You already have " + itemName + ".");
         return;
       }
-      this.location = subject;
-      tell(subject, "You have picked up " + itemName + ".");
+
+      var locationChain = this.locationChain();
+      for (var i = 0; i < locationChain.length; i++) {
+        var loc = locationChain[i];
+        if (subject == loc) break; // automatically allow
+        if (!loc.beAskedToGive(this, subject, false)) {
+          loc.beAskedToGive(this, subject, true);
+          return;
+        }
+      }
+      if (this.location.beAskedToGive(this, subject, true))
+        this.location = subject;
+    };
+
+    Item.prototype.beGivenBy = function(subject, recipient) {
+      if (!subject.canSee(recipient)) {
+        tell(subject, "You can't see " + recipient.definiteName + " here.");
+        return;
+      }
+      if (subject === recipient) {
+        tell(subject, "You already have " + this.definiteName + ".");
+        return;
+      }
+
+      var locationChain = recipient.locationChain();
+      for (var i = 0; i < locationChain.length; i++) {
+        var loc = locationChain[i];
+        if (subject == loc) break; // automatically allow
+        if (!loc.beAskedToTake(this, subject, false)) {
+          loc.beAskedToTake(this, subject, true);
+          return;
+        }
+      }
+      if (recipient.beAskedToTake(this, subject, true))
+        this.location = recipient;
     };
 
     Item.prototype.beDroppedBy = function(subject) {
-      this.location = subject.location;
-
-      tell(subject, "You have dropped " + subject.orYoureself(item) + ".");
-    };
+      this.beGivenBy(subject, subject.location);
+    }
 
     Item.prototype.beExaminedBy = function(subject) {
       var item = this;
@@ -663,6 +701,27 @@ var Adventure = (function() {
         }
         if (loc === this) return true;
       }
+      return false;
+    };
+
+    Item.prototype.locationChain = function() {
+      var ids = {};
+      var ret = [];
+      for (var loc = this; loc && loc.id && (!(loc.id in ids)); loc = loc.location) {
+        ret.push(loc);
+      }
+      return ret;
+    };
+
+    // return true if yes, false if no
+    Item.prototype.beAskedToGive = function(item, asker, doTell) {
+      if (doTell) tell(asker, "You have taken " + asker.orYourself(item) + " from " + asker.orYourself(this) +
+        ".");
+      return true;
+    };
+
+    Item.prototype.beAskedToTake = function(item, asker, doTell) {
+      if (doTell) tell(asker, "You can't put " + asker.orYourself(item) + " into " + asker.orYourself(this) + ".");
       return false;
     };
 
@@ -794,6 +853,17 @@ var Adventure = (function() {
     };
     a.addPlaceMethod = addMethodFactory('Place', Place);
 
+    // return true if yes, false if no
+    Place.prototype.beAskedToGive = function(item, asker, doTell) {
+      if (doTell) tell(asker, "You have picked up " + asker.orYourself(item) + ".");
+      return true;
+    };
+
+    Place.prototype.beAskedToTake = function(item, asker, doTell) {
+      if (doTell) tell(asker, "You have dropped " + asker.orYourself(item) + ".");
+      return true;
+    };
+
     function Person(options) {
       if (typeof options === 'string') {
         options = {
@@ -848,6 +918,21 @@ var Adventure = (function() {
 
     Person.prototype = Object.create(Item.prototype);
 
+    // return true if yes, false if no
+    Person.prototype.beAskedToGive = function(item, asker, doTell) {
+      if (doTell) tell(asker, capitalize(
+        asker.orYourself(this, this.definiteName, "You") + " won't " + ((this === item) ? "let you take " +
+          asker.orYourself(item, item.them) : "give you " + asker.orYourself(item)) + "."));
+      return false;
+    };
+
+    Person.prototype.beAskedToTake = function(item, asker, doTell) {
+      if (doTell) tell(asker,
+        capitalize(asker.orYourself(this, this.definiteName + " " + this.verb('do'), "You do") + "n't want " +
+          ((this === item) ? asker.orYourself(item, item.themselves) : asker.orYourself(item) + ".")));
+      return false;
+    };
+
     Person.prototype.setKnown = function(object, value) {
       if (typeof value === 'undefined') value = true;
       this.knownItems = this.knownItems.filter(function(it) {
@@ -861,8 +946,7 @@ var Adventure = (function() {
     };
 
     var tell = a.tell = function(people, infoPeople, infoNearby, infoDistant) {
-
-      if (people instanceof Person) {
+      if (people instanceof Item) {
         people = [people];
       }
       var peopleMap = {};
@@ -968,7 +1052,6 @@ var Adventure = (function() {
         var mustSee = ('mustSee' in options.command) ? !!options.command.mustSee : true; // default true
         var mustHave = !!options.command.mustHave; // default false
         var objectMethodName = options.command.objectMethodName || false;
-        var locationPermissionMethodName = options.command.locationPermissionMethodName || 'permitsPossession';
         command = function(object) {
           var subject = this;
           var objectName = this.orYourself(object);
@@ -984,15 +1067,10 @@ var Adventure = (function() {
             tell(this, youCant.replace(/%[id][0-9]*/gi, '').replace(/\s+/g, ' '));
             return;
           }
-          if (object.location && locationPermissionMethodName in object.location) {
-            if (!(object.location[locationPermissionMethodName](subject,object))) {
-              return; // it's up to the object to enforce permissions
-            }
-          }
           if (!objectMethodName || !(objectMethodName in object)) {
             tell(this, youCant.replace(/%[id][0-9]*/gi, objectName).replace(/\s+/g, ' '));
             return;
-          }          
+          }
           var args = Array.from(arguments);
           args[0] = this;
           object[objectMethodName].apply(object, args);
@@ -1002,6 +1080,7 @@ var Adventure = (function() {
         throw new Error('The command needs either a command function or command options object');
       }
       command.templates = options.templates;
+      command.methodName = options.methodName;
       if (options.help) {
         command.help = options.help;
       }
@@ -1066,6 +1145,16 @@ var Adventure = (function() {
     });
 
     a.newCommand({
+      methodName: "give",
+      templates: ["give %i1 to %i2", "give %i2 %i1"],
+      help: "Give an item to someone else.",
+      command: {
+        objectMethodName: "beGivenBy",
+        mustHave: true
+      }
+    });
+
+    a.newCommand({
       methodName: "inventory",
       templates: 'inventory|i',
       help: 'List the items in your possession.',
@@ -1107,7 +1196,7 @@ var Adventure = (function() {
 
     a.newCommand({
       methodName: "examine",
-      templates: ["examine|x %i1", "look|l |at %i1"],
+      templates: ["examine|x %i1", "look|l |at|in|inside|into %i1"],
       help: "Examine an item.",
       command: {
         objectMethodName: "beExaminedBy"
@@ -1191,14 +1280,14 @@ var Adventure = (function() {
             options.pronoun) :
           'it');
 
-        if ('name' in reverse) {
-          reverse.name = immutable(reverse.name);
+        if ('name' in reverse || 'pronoun' in reverse) {
+          reverse.name = immutable(reverse.name || name);
           var defaultNames = getDefaultNames(unwrap(reverse.name), reversePronoun);
           reverse.keywords = immutable(reverse.keywords || defaultNames.keywords);
           reverse.definiteName = immutable(reverse.definiteName || defaultNames.definiteName);
           reverse.indefiniteName = immutable(reverse.indefiniteName || defaultNames.indefiniteName);
           reverse.pluralName = immutable(reverse.pluralName || defaultNames.pluralName);
-          reverse.pronoun = immutable(reverse.pronoun || defaultNames.pronoun);
+          reverse.pronoun = immutable(reversePronoun);
         }
 
         ['description', 'keywords', 'definiteName', 'indefiniteName', 'pluralName', 'pronoun', 'canBeTaken',
@@ -1564,7 +1653,7 @@ var Adventure = (function() {
         return;
       }
       this.open = true;
-      tell(subject, "You have opened " + e.getDistinguishingName() + ".");
+      tell(subject, "You have opened " + this.getDistinguishingName() + ".");
     },
     beClosedBy: function(subject) {
       if (!this.open) {
@@ -1620,10 +1709,8 @@ var Adventure = (function() {
     },
     beExaminedBy: function(subject) {
       this.superMethod('beExaminedBy')(subject);
-      var ret = '\b ' + A.capitalize(this.they) + ' ' + they.are + ' ' + (this.open ? 'open' : ('closed and ' +
-        (
-          this.unlocked ?
-          'un' : ''))) + 'locked.';
+      var ret = '\b ' + A.capitalize(this.they) + ' ' + this.are + ' ' + (this.open ? 'open.' : ('closed and ' +
+        (this.unlocked ? 'un' : '') + 'locked.'));
       ret += ' ' + A.capitalize(this.they) + ' ' + (this.unlocked ? '' : 'un') + this.verb('lock') + ' from ' +
         (this.isForwardExit ?
           'this' : 'the other') + ' side.';

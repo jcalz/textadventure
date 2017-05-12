@@ -377,11 +377,13 @@
         objectMethodName: "bePulledBy"
       }
     });
+
+    var give = adventure.getCommand('give');
     adventure.newCommand({
       methodName: "putInto",
-      templates: ["put|place %i2 into|in|inside %i1"],
-      command: {
-        objectMethodName: "bePutIntoBy"
+      templates: ["put|place %i1 into|in|inside %i2"],
+      command: function(item, loc) {
+        give.call(this, item, loc);
       }
     });
 
