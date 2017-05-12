@@ -381,7 +381,7 @@
     var give = adventure.getCommand('give');
     adventure.newCommand({
       methodName: "putInto",
-      templates: ["put|place %i1 into|in|inside %i2"],
+      templates: ["put|place %i1 into|in|inside|on|onto %i2"],
       command: function(item, loc) {
         give.call(this, item, loc);
       }

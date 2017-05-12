@@ -2,7 +2,6 @@
 //TODO limit to inventory?
 //TODO maybe ambiguous items should be a warning error rather than first-found?
 //TODO "jump"
-//TODO "put ___ on ____"?
 // TODO witnesses should be informed of your actions, I guess?
 //TODO add timed events with some kind of 'tick' handler or some other system
 
@@ -503,6 +502,10 @@ var Adventure = (function() {
       options.location = (unwrap(options.canBeTaken) ? mutable : immutable)(options.location || null);
       options.hidden = 'hidden' in options ? mutable(options.hidden) : mutable(false);
       options.unlisted = immutable('unlisted' in options ? options.unlisted : false);
+      options.playableCharacter = immutable(('playableCharacter' in options) ? options.playableCharacter : false);
+      options.alive = immutable(('alive' in options) ? options.alive : false);
+
+      if (unwrap(options.playableCharacter)) options.informationQueue = mutable([]);
       options.isItem = immutable(true);
 
       setOptions(item, options);
@@ -519,7 +522,7 @@ var Adventure = (function() {
           return ret;
         },
         set: function(l) {
-          if (item.ultimatelyContains(l)) {
+          if (item.ultimatelyContains(l, true)) {
             throw new Error(capitalize(item.definiteName) + " ultimately contains " + capitalize(l.name) +
               " so " + item.they + " cannot be contained by " +
               ((l === item) ? l.themselves : l.them) + " without making a loop.");
@@ -572,9 +575,8 @@ var Adventure = (function() {
       // prevent trying to create a loop
       if (this.ultimatelyContains(subject)) {
         tell(subject, "You can't take " +
-          subject.orYourself(this) + " because " +
-          subject.orYourself(this, this.they + " already " + this.have, "you already have") + " " +
-          (this === subject ? "yourself" : "you") + ".");
+          subject.orYourself(this) + ((subject === this) ? "." : " because " +
+            this.they + " already " + (this.alive ? this.have : this.verb('contain'))) + " you.");
         return;
       }
 
@@ -608,11 +610,13 @@ var Adventure = (function() {
       }
       // prevent trying to create a loop
       if (this.ultimatelyContains(recipient)) {
-        tell(subject, "You can't put " +
-          subject.orYourself(this) + " into " +
+        tell(subject, "You can't " + (recipient.alive ? 'give ' : 'put ') +
+          subject.orYourself(this) + (recipient.alive ? ' to ' : ' into ') +
           subject.orYourself(recipient, this == recipient ? recipient.themselves : recipient.definiteName) +
-          " because " + subject.orYourself(this, this.they + " already " + this.have, "you already have") + " " +
-          subject.orYourself(recipient, this == recipient ? recipient.themselves : recipient.them) + ".");
+          ((recipient === this) ? "." :
+            " because " + subject.orYourself(this, this.they + " already " + (this.alive ? this.have : this.verb(
+              'contain')), "you already have") + " " +
+            subject.orYourself(recipient, recipient.them) + "."));
         return;
       }
       var locationChain = recipient.locationChain();
@@ -690,7 +694,7 @@ var Adventure = (function() {
           ret += ' ' + capitalize(series(itemNames)) + ' ' + ((items.length > 1) ? 'are' : items[0].are) +
             ' here.';
         } else {
-          ret += ' ' + subject.orYourself(item, capitalize(item.pronoun), 'You') + ' ' + ((item instanceof Person) ?
+          ret += ' ' + subject.orYourself(item, capitalize(item.pronoun), 'You') + ' ' + ((item.alive) ?
               subject.orYourself(item, item.have, 'have') : item.verb(
                 'contain')) +
             ' ' + series(itemNames) + '.';
@@ -722,9 +726,9 @@ var Adventure = (function() {
       return items;
     };
 
-    Item.prototype.ultimatelyContains = function(item) {
+    Item.prototype.ultimatelyContains = function(item, excludingItself) {
       var cnt = 0;
-      for (var loc = item.location; loc; loc = loc.location) {
+      for (var loc = (excludingItself ? item.location : item); loc; loc = loc.location) {
         cnt++;
         if (cnt > a.maxNesting) {
           throw new Error('Location nesting of more than ' + a.maxNesting + ' exceeded!');
@@ -738,6 +742,7 @@ var Adventure = (function() {
       var ids = {};
       var ret = [];
       for (var loc = this; loc && loc.id && (!(loc.id in ids)); loc = loc.location) {
+        ids[loc.id] = true;
         ret.push(loc);
       }
       return ret;
@@ -751,7 +756,8 @@ var Adventure = (function() {
     };
 
     Item.prototype.beAskedToTake = function(item, asker, doTell) {
-      if (doTell) tell(asker, "You can't put " + asker.orYourself(item) + " into " + asker.orYourself(this) + ".");
+      if (doTell) tell(asker, "You can't " + (this.alive ? 'give ' : 'put ') + asker.orYourself(item) + (this.alive ?
+        ' to ' : ' into ') + asker.orYourself(this) + ".");
       return false;
     };
 
@@ -919,7 +925,8 @@ var Adventure = (function() {
       options.isPerson = immutable(true);
       options.knownItems = [this];
 
-      options.informationQueue = [];
+      options.playableCharacter = immutable(('playableCharacter' in options) ? options.playableCharacter : true);
+      options.alive = immutable(('alive' in options) ? options.alive : true);
 
       Item.call(this, options, true);
 
@@ -952,13 +959,14 @@ var Adventure = (function() {
     Person.prototype.beAskedToGive = function(item, asker, doTell) {
       if (doTell) tell(asker, capitalize(
         asker.orYourself(this, this.definiteName, "You") + " won't " + ((this === item) ? "let you take " +
-          asker.orYourself(item, item.them) : "give you " + asker.orYourself(item)) + "."));
+          asker.orYourself(item, item.them) : "let you take " + asker.orYourself(item)) + "."));
       return false;
     };
 
     Person.prototype.beAskedToTake = function(item, asker, doTell) {
       if (doTell) tell(asker,
-        capitalize(asker.orYourself(this, this.definiteName + " " + this.verb('do'), "You do") + "n't want " +
+        capitalize(asker.orYourself(this, this.definiteName + " " + this.verb('do'), "You do") +
+          "n't want to take " +
           ((this === item) ? asker.orYourself(item, item.themselves) : asker.orYourself(item) + ".")));
       return false;
     };
@@ -1006,6 +1014,7 @@ var Adventure = (function() {
     };
 
     Person.prototype.consumeInformationQueue = function() {
+      if (!this.playableCharacter) return '';
       if (!this.informationQueue) return '';
       var ret = this.informationQueue.join('\n').replace(/\n+[\b]/g, '') + '\n';
       this.informationQueue = [];
@@ -1013,7 +1022,8 @@ var Adventure = (function() {
     };
 
     Person.prototype.learn = function(info) {
-      if (!this.informationQueue) return;
+      if (!this.playableCharacter) return '';
+      if (!this.informationQueue) this.informationQueue = [];
 
       if (typeof info === 'string') {
         var i = info;

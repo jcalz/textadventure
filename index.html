@@ -382,7 +382,7 @@
     var give = adventure.getCommand('give');
     adventure.newCommand({
       methodName: "putInto",
-      templates: ["put|place %i1 into|in|inside %i2"],
+      templates: ["put|place %i1 into|in|inside|on|onto %i2"],
       command: function(item, loc) {
         give.call(this, item, loc);
       }
@@ -849,6 +849,51 @@ return;
       this.superMethod('beExaminedBy')(subject);
     }        
     */
+
+    // okay let's do something
+    var batman = adventure.newPerson({
+      name: 'Batman',
+      keywords: ['bat man', 'batman', 'dark knight'],
+      pronoun: 'he',
+      location: pit
+    });
+
+    var cage = adventure.newItem({
+      name: 'cage',
+      location: batman,
+      closed: true,
+      beExaminedBy: function(subject) {
+        this.superMethod('beExaminedBy')(subject);
+        tell(subject, '\b It is ' + (this.closed ? 'closed' : 'open') + '.');
+      },
+      beAskedToTake: function(item, subject, doTell) {
+        if (!this.closed) {
+          if (doTell) tell(subject, "You have put " + item.definiteName + " into the cage.");
+          return true;
+        }
+        if (doTell) tell(subject, "You can't put " + item.definiteName + " into the closed cage.");
+        return false;
+      },
+      beAskedToGive: function(item, subject, doTell) {
+        if (!this.closed) {
+          return this.superMethod('beAskedToGive')(item, subject, doTell);
+        }
+        if (doTell) tell(subject, "You can't take anything out of the cage when it is closed.");
+        return false;
+      }
+    });
+
+    // item? or person?
+    var cat = adventure.newItem({
+      name: 'cat',
+      location: cage,
+      alive: true
+    });
+
+    var collar = adventure.newItem({
+      name: 'collar',
+      location: cat
+    });
 
     var initialState = adventure.serialize();
     var previouslySavedState = hasLocalStorage && localStorage.getItem(autosaveKey);
