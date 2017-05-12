@@ -508,6 +508,7 @@ var Adventure = (function() {
       setOptions(item, options);
 
       var location = this.location;
+
       var o = {
         configurable: true,
         enumerable: true,
@@ -518,6 +519,11 @@ var Adventure = (function() {
           return ret;
         },
         set: function(l) {
+          if (item.ultimatelyContains(l)) {
+            throw new Error(capitalize(item.definiteName) + " ultimately contains " + capitalize(l.name) +
+              " so " + item.they + " cannot be contained by " +
+              ((l === item) ? l.themselves : l.them) + " without making a loop.");
+          }
           location = l;
         }
       };
@@ -552,7 +558,6 @@ var Adventure = (function() {
     };
 
     Item.prototype.beTakenBy = function(subject) {
-      if (!this.location) return; // weird
 
       var itemName = subject.orYourself(this);
       if (!this.canBeTaken) {
@@ -564,20 +569,35 @@ var Adventure = (function() {
         return;
       }
 
+      // prevent trying to create a loop
+      if (this.ultimatelyContains(subject)) {
+        tell(subject, "You can't take " +
+          subject.orYourself(this) + " because " +
+          subject.orYourself(this, this.they + " already " + this.have, "you already have") + " " +
+          (this === subject ? "yourself" : "you") + ".");
+        return;
+      }
+
       var locationChain = this.locationChain();
       for (var i = 0; i < locationChain.length; i++) {
         var loc = locationChain[i];
-        if (subject == loc) break; // automatically allow
+        if (subject === loc) continue; // you say yes to yourself
         if (!loc.beAskedToGive(this, subject, false)) {
           loc.beAskedToGive(this, subject, true);
           return;
         }
       }
-      if (this.location.beAskedToGive(this, subject, true))
+      // one final direct check
+      if (!this.location) {
+        tell(subject, "You have picked up " + itemName + ".");
         this.location = subject;
+      } else if (this.location.beAskedToGive(this, subject, true)) {
+        this.location = subject;
+      }
     };
 
     Item.prototype.beGivenBy = function(subject, recipient) {
+
       if (!subject.canSee(recipient)) {
         tell(subject, "You can't see " + recipient.definiteName + " here.");
         return;
@@ -586,18 +606,28 @@ var Adventure = (function() {
         tell(subject, "You already have " + this.definiteName + ".");
         return;
       }
-
+      // prevent trying to create a loop
+      if (this.ultimatelyContains(recipient)) {
+        tell(subject, "You can't put " +
+          subject.orYourself(this) + " into " +
+          subject.orYourself(recipient, this == recipient ? recipient.themselves : recipient.definiteName) +
+          " because " + subject.orYourself(this, this.they + " already " + this.have, "you already have") + " " +
+          subject.orYourself(recipient, this == recipient ? recipient.themselves : recipient.them) + ".");
+        return;
+      }
       var locationChain = recipient.locationChain();
       for (var i = 0; i < locationChain.length; i++) {
         var loc = locationChain[i];
-        if (subject == loc) break; // automatically allow
+        if (subject === loc) continue; // you say yes to yourself
         if (!loc.beAskedToTake(this, subject, false)) {
           loc.beAskedToTake(this, subject, true);
           return;
         }
       }
-      if (recipient.beAskedToTake(this, subject, true))
+      // one final direct check
+      if (recipient.beAskedToTake(this, subject, true)) {
         this.location = recipient;
+      }
     };
 
     Item.prototype.beDroppedBy = function(subject) {
