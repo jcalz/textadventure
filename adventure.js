@@ -1336,13 +1336,13 @@ var Adventure = (function() {
       }
       Object.defineProperty(this, 'destination', o);
 
-      var reverse = unwrap(options.reverse);
-
-      if (reverse) {
+      var reverse = unwrap(options.reverse);	
+		
+      if (reverse !== false) {
 
         delete options.reverse;
 
-        if (reverse === true) {
+        if (!reverse) {
           reverse = {};
         } else if (typeof reverse == 'string') {
           reverse = {
