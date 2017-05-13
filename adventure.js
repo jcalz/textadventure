@@ -2,7 +2,6 @@
 //TODO limit to inventory?
 //TODO maybe ambiguous items should be a warning error rather than first-found?
 //TODO "jump"
-// TODO witnesses should be informed of your actions, I guess?
 //TODO add timed events with some kind of 'tick' handler or some other system
 
 var Adventure = (function() {
@@ -536,6 +535,10 @@ var Adventure = (function() {
 
     };
 
+    Item.prototype.toString = function() {
+      return this.definiteName;
+    }
+
     Object.keys(grammar).forEach(function(k) {
       if (k === 'verb') return;
       Object.defineProperty(Item.prototype, k, {
@@ -561,7 +564,7 @@ var Adventure = (function() {
     };
 
     Item.prototype.beTakenBy = function(subject) {
-
+      var item = this;
       var itemName = subject.orYourself(this);
       if (!this.canBeTaken) {
         tell(subject, "You can't pick up " + itemName + ".");
@@ -591,7 +594,12 @@ var Adventure = (function() {
       }
       // one final direct check
       if (!this.location) {
-        tell(subject, "You have picked up " + itemName + ".");
+        tell(subject,
+          "You have picked up " + itemName + ".",
+          function(witness) {
+            return capitalize(subject.definiteName) + ' ' + subject.have + ' picked up ' + item.definiteName +
+              '.'
+          });
         this.location = subject;
       } else if (this.location.beAskedToGive(this, subject, true)) {
         this.location = subject;
@@ -700,9 +708,7 @@ var Adventure = (function() {
             ' ' + series(itemNames) + '.';
         }
       }
-
       tell(subject, ret);
-      // OTHERS, function(){return capitalize(subject.definiteName) + " " + subject.verb('look') + ' at ' + item.definiteName;});
     };
 
     Item.prototype.allContents = function() {
@@ -750,8 +756,14 @@ var Adventure = (function() {
 
     // return true if yes, false if no
     Item.prototype.beAskedToGive = function(item, asker, doTell) {
+      var holder = this;
       if (doTell) tell(asker, "You have taken " + asker.orYourself(item) + " from " + asker.orYourself(this) +
-        ".");
+        ".",
+        function(witness) {
+          return capitalize(asker.definiteName) + ' ' + asker.have + ' taken ' + item.definiteName + ' from ' +
+            holder.definiteName +
+            '.'
+        });
       return true;
     };
 
@@ -891,12 +903,16 @@ var Adventure = (function() {
 
     // return true if yes, false if no
     Place.prototype.beAskedToGive = function(item, asker, doTell) {
-      if (doTell) tell(asker, "You have picked up " + asker.orYourself(item) + ".");
+      if (doTell) tell(asker, "You have picked up " + asker.orYourself(item) + ".", function(witness) {
+        return capitalize(asker.definiteName) + ' ' + asker.have + ' picked up ' + item.definiteName + '.';
+      });
       return true;
     };
 
     Place.prototype.beAskedToTake = function(item, asker, doTell) {
-      if (doTell) tell(asker, "You have dropped " + asker.orYourself(item) + ".");
+      if (doTell) tell(asker, "You have dropped " + asker.orYourself(item) + ".", function(witness) {
+        return capitalize(asker.definiteName) + ' ' + asker.have + ' dropped ' + item.definiteName + '.';
+      });
       return true;
     };
 
@@ -957,21 +973,42 @@ var Adventure = (function() {
 
     // return true if yes, false if no
     Person.prototype.beAskedToGive = function(item, asker, doTell) {
-      if (doTell) tell(asker, capitalize(
-        asker.orYourself(this, this.definiteName, "You") + " won't " + ((this === item) ? "let you take " +
-          asker.orYourself(item, item.them) : "let you take " + asker.orYourself(item)) + "."));
+      if (doTell) {
+        tell(asker, capitalize(
+            asker.orYourself(this, this.definiteName, "You")) + " won't let you take " + asker.orYourself(item) +
+          ".");
+        if (this !== asker)
+          tell(this, function() {
+            return capitalize(asker.definiteName) + ' ' + asker.verb('try') + ' to take ' + item.definiteName +
+              ' from you, but you don\'t let ' + asker.them + '.';
+          });
+      }
       return false;
     };
 
     Person.prototype.beAskedToTake = function(item, asker, doTell) {
-      if (doTell) tell(asker,
-        capitalize(asker.orYourself(this, this.definiteName + " " + this.verb('do'), "You do") +
-          "n't want to take " +
-          ((this === item) ? asker.orYourself(item, item.themselves) : asker.orYourself(item) + ".")));
+      if (doTell) {
+        tell(asker,
+          capitalize(asker.orYourself(this, this.definiteName + " " + this.verb('do'), "You do") +
+            "n't want to take " +
+            ((this === item) ? asker.orYourself(item, item.themselves) : asker.orYourself(item) + ".")));
+        if (this !== asker) {
+          var askee = this;
+          tell(this, function() {
+            return capitalize(asker.definiteName) + ' ' + asker.verb('try') + ' to give ' +
+              askee.nameFor(item) + ' to you, but you don\'t take ' + item.them + '.';
+          });
+        }
+      }
       return false;
     };
 
     Person.prototype.setKnown = function(object, value) {
+      if (typeof object === 'array') {
+        object.forEach(function(object) {
+          this.setKnown(object, value);
+        });
+      }
       if (typeof value === 'undefined') value = true;
       this.knownItems = this.knownItems.filter(function(it) {
         return it !== object;
@@ -990,7 +1027,7 @@ var Adventure = (function() {
       var peopleMap = {};
       people.forEach(function(person) {
         peopleMap[person.id] = true;
-        person.learn(infoPeople);
+        if (infoPeople) person.learn(infoPeople);
       });
 
       if (infoNearby || infoDistant) {
@@ -1000,7 +1037,7 @@ var Adventure = (function() {
 
           var canSee = false;
           for (var p = 0; p < people.length; p++) {
-            if (person.canSee(p)) {
+            if (person.canSee(people[p])) {
               canSee = true;
               break;
             }
@@ -1042,9 +1079,15 @@ var Adventure = (function() {
     };
 
     Person.prototype.orYourself = function(item, name, youName) {
-      name = name || item.definiteName;
+      name = name || this.nameFor(item);
       if (this !== item) return name;
       return youName || 'yourself';
+    }
+
+    Person.prototype.nameFor = function(item, suppressKnowledge) {
+      var ret = this.isKnown(item) ? item.definiteName : item.indefiniteName
+      if (!suppressKnowledge) this.setKnown(item);
+      return ret;
     }
 
     a.newPerson = function(options) {
@@ -1348,6 +1391,9 @@ var Adventure = (function() {
 
         options.reverseExit = immutable(reverseExit);
 
+        options.otherWay = immutable(reverseExit);
+        reverse.otherWay = immutable(this);
+
         if ('location' in reverse) throw new Error(
           'Do not specify location of reverse exit; it will automatically be the same as the exit destination');
         if ('destination' in reverse) throw new Error(
@@ -1452,10 +1498,26 @@ var Adventure = (function() {
       return ret;
     };
     Exit.prototype.beUsedBy = function(subject) {
-      var ret = 'You use ' + this.definiteName + (this.direction ? ' leading ' + directionName(this.direction) :
-        '') + '.\n';
+      var exitName = this.definiteName + (this.direction ? ' leading ' + directionName(this.direction) :
+        '');
+      var ret = 'You use ' + exitName + '.\n';
+
+      var exit = this;
+      tell(subject, ret, function(witness) {
+        return capitalize(subject.definiteName) + ' ' + subject.verb('leave') + ' ' + exit.location.definiteName +
+          ' through ' + exitName + '.';
+      });
+
       subject.location = this.destination;
-      tell(subject, ret);
+
+      var otherWayName = this.otherWay ? ' through ' + this.otherWay.definiteName + (this.otherWay.direction ?
+        ' leading ' + directionName(this.otherWay.direction) : '') : '';
+
+      tell(subject, null, function(witness) {
+        return capitalize(subject.definiteName) + ' ' + subject.verb('enter') + ' ' + exit.destination.definiteName +
+          otherWayName + '.';
+      });
+
       subject.look();
     };
     Exit.prototype.beExaminedBy = function(subject) {
@@ -1463,7 +1525,8 @@ var Adventure = (function() {
         tell(subject, this.description);
         return;
       }
-      tell(subject, capitalize(this.theyre) + ' ' + this.getDistinguishingName(true) + '.');
+      var exitName = this.getDistinguishingName(true);
+      tell(subject, capitalize(this.theyre) + ' ' + exitName + '.');
     };
 
     a.newExit = function(options) {
@@ -1682,7 +1745,7 @@ var Adventure = (function() {
 
     };
 
-  };
+  }
 
   // some nice defaults?
   A.openableExitOptions = {
@@ -1693,7 +1756,11 @@ var Adventure = (function() {
         return;
       }
       this.open = true;
-      tell(subject, "You have opened " + this.getDistinguishingName() + ".");
+      var exitName = this.getDistinguishingName();
+      var info = function(person) {
+        return A.capitalize(subject.definiteName) + ' ' + subject.have + ' opened ' + exitName + '.';
+      };
+      tell(subject, info, info);
     },
     beClosedBy: function(subject) {
       if (!this.open) {
@@ -1701,7 +1768,11 @@ var Adventure = (function() {
         return;
       }
       this.open = false;
-      tell(subject, "You have closed " + this.getDistinguishingName() + ".");
+      var exitName = this.getDistinguishingName();
+      var info = function(person) {
+        return A.capitalize(subject.definiteName) + ' ' + subject.have + ' closed ' + exitName + '.';
+      };
+      tell(subject, info, info);
     },
     beUsedBy: function(subject) {
       if (!this.open) {
@@ -1766,7 +1837,11 @@ var Adventure = (function() {
         return;
       }
       this.unlocked = true;
-      tell(subject, "You have unlocked " + this.definiteName + '.');
+      var exitName = this.getDistinguishingName();
+      var info = function(person) {
+        return A.capitalize(subject.definiteName) + ' ' + subject.have + ' unlocked ' + exitName + '.';
+      };
+      tell(subject, info, info);
     },
     beLockedBy: function(subject) {
       if (this.open) {
@@ -1782,7 +1857,11 @@ var Adventure = (function() {
         return;
       }
       this.unlocked = false;
-      tell(subject, "You have locked " + this.definiteName + '.');
+      var exitName = this.getDistinguishingName();
+      var info = function(person) {
+        return A.capitalize(subject.definiteName) + ' ' + subject.have + ' locked ' + exitName + '.';
+      };
+      tell(subject, info, info);
     }
   };
 
