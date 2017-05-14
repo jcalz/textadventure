@@ -503,6 +503,8 @@ var Adventure = (function() {
       options.unlisted = immutable('unlisted' in options ? options.unlisted : false);
       options.playableCharacter = immutable(('playableCharacter' in options) ? options.playableCharacter : false);
       options.alive = immutable(('alive' in options) ? options.alive : false);
+      options.wantsToTake = mutable(options.wantsToTake || {});
+      options.wantsToGive = mutable(options.wantsToGive || {});
 
       if (unwrap(options.playableCharacter)) options.informationQueue = mutable([]);
       options.isItem = immutable(true);
@@ -564,6 +566,7 @@ var Adventure = (function() {
     };
 
     Item.prototype.beTakenBy = function(subject) {
+
       var item = this;
       var itemName = subject.orYourself(this);
       if (!this.canBeTaken) {
@@ -574,6 +577,8 @@ var Adventure = (function() {
         tell(subject, "You already have " + itemName + ".");
         return;
       }
+
+      subject.wantsToTake[this.id] = true;
 
       // prevent trying to create a loop
       if (this.ultimatelyContains(subject)) {
@@ -593,16 +598,23 @@ var Adventure = (function() {
         }
       }
       // one final direct check
-      if (!this.location) {
+      var success = false;
+      loc = this.location;
+      if (!loc) {
         tell(subject,
           "You have picked up " + itemName + ".",
           function(witness) {
             return capitalize(subject.definiteName) + ' ' + subject.have + ' picked up ' + item.definiteName +
               '.'
           });
-        this.location = subject;
+        success = true;
       } else if (this.location.beAskedToGive(this, subject, true)) {
+        success = true;
+      }
+      if (success) {
         this.location = subject;
+        delete subject.wantsToTake[this.id];
+        delete((loc || {}).wantsToGive || {})[this.id];
       }
     };
 
@@ -616,6 +628,12 @@ var Adventure = (function() {
         tell(subject, "You already have " + this.definiteName + ".");
         return;
       }
+
+      if (!subject.wantsToGive[this.id]) {
+        subject.wantsToGive[this.id] = {};
+      }
+      subject.wantsToGive[this.id][recipient.id] = true;
+
       // prevent trying to create a loop
       if (this.ultimatelyContains(recipient)) {
         tell(subject, "You can't " + (recipient.alive ? 'give ' : 'put ') +
@@ -639,6 +657,8 @@ var Adventure = (function() {
       // one final direct check
       if (recipient.beAskedToTake(this, subject, true)) {
         this.location = recipient;
+        delete subject.wantsToGive[this.id];
+        delete(recipient.wantsToTake || {})[this.id];
       }
     };
 
@@ -973,6 +993,16 @@ var Adventure = (function() {
 
     // return true if yes, false if no
     Person.prototype.beAskedToGive = function(item, asker, doTell) {
+      if ((this.wantsToGive[item.id] || {})[asker.id]) {
+        if (doTell) {
+          tell(this, 'You have given ' + this.nameFor(item) + ' to ' + this.nameFor(asker) + '.');
+          if (this !== asker) {
+            tell(asker, asker.nameFor(this) + ' ' + this.have + ' given you ' + asker.nameFor(item) + '.');
+          }
+        }
+        return true;
+      }
+
       if (doTell) {
         tell(asker, capitalize(
             asker.orYourself(this, this.definiteName, "You")) + " won't let you take " + asker.orYourself(item) +
@@ -987,6 +1017,15 @@ var Adventure = (function() {
     };
 
     Person.prototype.beAskedToTake = function(item, asker, doTell) {
+      if (this.wantsToTake[item.id]) {
+        if (doTell) {
+          tell(asker, 'You have given ' + asker.nameFor(item) + ' to ' + asker.nameFor(this) + '.');
+          if (this !== asker) {
+            tell(this, this.nameFor(asker) + ' ' + asker.have + ' given you ' + this.nameFor(item) + '.');
+          }
+        }
+        return true;
+      }
       if (doTell) {
         tell(asker,
           capitalize(asker.orYourself(this, this.definiteName + " " + this.verb('do'), "You do") +
@@ -1336,8 +1375,8 @@ var Adventure = (function() {
       }
       Object.defineProperty(this, 'destination', o);
 
-      var reverse = unwrap(options.reverse);	
-		
+      var reverse = unwrap(options.reverse);
+
       if (reverse !== false) {
 
         delete options.reverse;
