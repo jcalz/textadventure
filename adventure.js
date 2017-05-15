@@ -3,6 +3,7 @@
 //TODO maybe ambiguous items should be a warning error rather than first-found?
 //TODO "jump"
 //TODO add timed events with some kind of 'tick' handler or some other system
+//TODO move all Person-specific methods up into Item unless there is a reason not to
 
 var Adventure = (function() {
 
@@ -987,7 +988,7 @@ var Adventure = (function() {
         });
 
       });
-
+      
       enforceImmutables(this);
 
     }
@@ -1053,6 +1054,7 @@ var Adventure = (function() {
         });
       }
       if (typeof value === 'undefined') value = true;
+      // TODO performance penalty here?
       this.knownItems = this.knownItems.filter(function(it) {
         return it !== object;
       });

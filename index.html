@@ -867,19 +867,6 @@
     boulder.location = closet;
     boulder = adventure.newItem(boulder);
 
-    /*
-    var magicEye = adventure.newItem("magic eye");
-    magicEye.keywords = ['eye','magic eye','magic'];
-    magicEye.location = room;
-    pit.beExaminedBy = function(subject) {
-      if (!subject.has(magicEye)) {
-        tell(subject, "YOU CANNOT SEE ANYTHING WITHOUT THE MAGIC EYE");
-return;
-        }
-      this.superMethod('beExaminedBy')(subject);
-    }        
-    */
-
     // okay let's do something
     var batman = adventure.newPerson({
       name: 'Batman',
