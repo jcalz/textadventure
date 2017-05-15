@@ -568,13 +568,12 @@ var Adventure = (function() {
     Item.prototype.beTakenBy = function(subject) {
 
       var item = this;
-      var itemName = subject.orYourself(this);
       if (!this.canBeTaken) {
-        tell(subject, "You can't pick up " + itemName + ".");
+        tell(subject, "You can't pick up " + subject.nameFor(item) + ".");
         return;
       }
       if (subject.has(this)) {
-        tell(subject, "You already have " + itemName + ".");
+        tell(subject, "You already have " + subject.nameFor(item) + ".");
         return;
       }
 
@@ -583,7 +582,7 @@ var Adventure = (function() {
       // prevent trying to create a loop
       if (this.ultimatelyContains(subject)) {
         tell(subject, "You can't take " +
-          subject.orYourself(this) + ((subject === this) ? "." : " because " +
+          subject.nameFor(this) + ((subject === this) ? "." : " because " +
             this.they + " already " + (this.alive ? this.have : this.verb('contain'))) + " you.");
         return;
       }
@@ -602,10 +601,11 @@ var Adventure = (function() {
       loc = this.location;
       if (!loc) {
         tell(subject,
-          "You have picked up " + itemName + ".",
+          "You have picked up " + subject.nameFor(item) + ".",
           function(witness) {
-            return capitalize(subject.definiteName) + ' ' + subject.have + ' picked up ' + item.definiteName +
-              '.'
+            return capitalize(witness.nameFor(subject)) + ' ' + subject.have + ' picked up ' + witness.nameFor(
+                item) +
+              '.';
           });
         success = true;
       } else if (this.location.beAskedToGive(this, subject, true)) {
@@ -621,11 +621,11 @@ var Adventure = (function() {
     Item.prototype.beGivenBy = function(subject, recipient) {
 
       if (!subject.canSee(recipient)) {
-        tell(subject, "You can't see " + recipient.definiteName + " here.");
+        tell(subject, "You can't see " + subject.nameFor(recipient) + " here.");
         return;
       }
       if (subject === recipient) {
-        tell(subject, "You already have " + this.definiteName + ".");
+        tell(subject, "You already have " + subject.nameFor(this) + ".");
         return;
       }
 
@@ -637,12 +637,12 @@ var Adventure = (function() {
       // prevent trying to create a loop
       if (this.ultimatelyContains(recipient)) {
         tell(subject, "You can't " + (recipient.alive ? 'give ' : 'put ') +
-          subject.orYourself(this) + (recipient.alive ? ' to ' : ' into ') +
-          subject.orYourself(recipient, this == recipient ? recipient.themselves : recipient.definiteName) +
+          subject.nameFor(this) + (recipient.alive ? ' to ' : ' into ') +
+          subject.nameFor(recipient, this == recipient ? recipient.themselves : subject.nameFor(recipient)) +
           ((recipient === this) ? "." :
-            " because " + subject.orYourself(this, this.they + " already " + (this.alive ? this.have : this.verb(
+            " because " + subject.nameFor(this, this.they + " already " + (this.alive ? this.have : this.verb(
               'contain')), "you already have") + " " +
-            subject.orYourself(recipient, recipient.them) + "."));
+            subject.nameFor(recipient, recipient.them) + "."));
         return;
       }
       var locationChain = recipient.locationChain();
@@ -674,8 +674,9 @@ var Adventure = (function() {
         ret += titleCase(item.name) + '\n';
       }
 
-      ret += item.description || (subject.orYourself(item, capitalize(item.theyre), "You're") + ' just ' +
-        subject.orYourself(item, item.indefiniteName) + '.');
+      ret += item.description || (subject.nameFor(item, capitalize(item.theyre), "You're") + ' just ' +
+        subject.nameFor(item, item.indefiniteName) + '.');
+      subject.setKnown(item);
 
       // describe exits with directions
       var exits = item.getExits().filter(function(ex) {
@@ -715,15 +716,15 @@ var Adventure = (function() {
         return (!(it instanceof Exit) || (!it.direction)) && it !== subject;
       });
       var itemNames = items.map(function(it) {
-        return subject.orYourself(it, it.indefiniteName, 'you');
+        return subject.nameFor(it, it.indefiniteName, 'you');
       });
       if (items.length > 0) {
         if (subject.location === item) {
           ret += ' ' + capitalize(series(itemNames)) + ' ' + ((items.length > 1) ? 'are' : items[0].are) +
             ' here.';
         } else {
-          ret += ' ' + subject.orYourself(item, capitalize(item.pronoun), 'You') + ' ' + ((item.alive) ?
-              subject.orYourself(item, item.have, 'have') : item.verb(
+          ret += ' ' + subject.nameFor(item, capitalize(item.pronoun), 'You') + ' ' + ((item.alive) ?
+              subject.nameFor(item, item.have, 'have') : item.verb(
                 'contain')) +
             ' ' + series(itemNames) + '.';
         }
@@ -777,19 +778,19 @@ var Adventure = (function() {
     // return true if yes, false if no
     Item.prototype.beAskedToGive = function(item, asker, doTell) {
       var holder = this;
-      if (doTell) tell(asker, "You have taken " + asker.orYourself(item) + " from " + asker.orYourself(this) +
+      if (doTell) tell(asker, "You have taken " + asker.nameFor(item) + " from " + asker.nameFor(this) +
         ".",
         function(witness) {
-          return capitalize(asker.definiteName) + ' ' + asker.have + ' taken ' + item.definiteName + ' from ' +
-            holder.definiteName +
-            '.'
+          return capitalize(witness.nameFor(asker)) + ' ' + asker.have + ' taken ' + witness.nameFor(item) +
+            ' from ' +
+            witness.nameFor(holder) + '.'
         });
       return true;
     };
 
     Item.prototype.beAskedToTake = function(item, asker, doTell) {
-      if (doTell) tell(asker, "You can't " + (this.alive ? 'give ' : 'put ') + asker.orYourself(item) + (this.alive ?
-        ' to ' : ' into ') + asker.orYourself(this) + ".");
+      if (doTell) tell(asker, "You can't " + (this.alive ? 'give ' : 'put ') + asker.nameFor(item) + (this.alive ?
+        ' to ' : ' into ') + asker.nameFor(this) + ".");
       return false;
     };
 
@@ -923,15 +924,17 @@ var Adventure = (function() {
 
     // return true if yes, false if no
     Place.prototype.beAskedToGive = function(item, asker, doTell) {
-      if (doTell) tell(asker, "You have picked up " + asker.orYourself(item) + ".", function(witness) {
-        return capitalize(asker.definiteName) + ' ' + asker.have + ' picked up ' + item.definiteName + '.';
+      if (doTell) tell(asker, "You have picked up " + asker.nameFor(item) + ".", function(witness) {
+        return capitalize(witness.nameFor(asker)) + ' ' + asker.have + ' picked up ' + witness.nameFor(item) +
+          '.';
       });
       return true;
     };
 
     Place.prototype.beAskedToTake = function(item, asker, doTell) {
-      if (doTell) tell(asker, "You have dropped " + asker.orYourself(item) + ".", function(witness) {
-        return capitalize(asker.definiteName) + ' ' + asker.have + ' dropped ' + item.definiteName + '.';
+      if (doTell) tell(asker, "You have dropped " + asker.nameFor(item) + ".", function(witness) {
+        return capitalize(witness.nameFor(asker)) + ' ' + asker.have + ' dropped ' + witness.nameFor(item) +
+          '.';
       });
       return true;
     };
@@ -1005,11 +1008,12 @@ var Adventure = (function() {
 
       if (doTell) {
         tell(asker, capitalize(
-            asker.orYourself(this, this.definiteName, "You")) + " won't let you take " + asker.orYourself(item) +
+            asker.nameFor(this, this.definiteName, "You")) + " won't let you take " + asker.nameFor(item) +
           ".");
         if (this !== asker)
-          tell(this, function() {
-            return capitalize(asker.definiteName) + ' ' + asker.verb('try') + ' to take ' + item.definiteName +
+          tell(this, function(askee) {
+            return capitalize(askee.nameFor(asker)) + ' ' + asker.verb('try') + ' to take ' + askee.nameFor(
+                item) +
               ' from you, but you don\'t let ' + asker.them + '.';
           });
       }
@@ -1028,13 +1032,13 @@ var Adventure = (function() {
       }
       if (doTell) {
         tell(asker,
-          capitalize(asker.orYourself(this, this.definiteName + " " + this.verb('do'), "You do") +
+          capitalize(asker.nameFor(this, this.definiteName + " " + this.verb('do'), "You do") +
             "n't want to take " +
-            ((this === item) ? asker.orYourself(item, item.themselves) : asker.orYourself(item) + ".")));
+            ((this === item) ? asker.nameFor(item, item.themselves) : asker.nameFor(item) + ".")));
         if (this !== asker) {
           var askee = this;
           tell(this, function() {
-            return capitalize(asker.definiteName) + ' ' + asker.verb('try') + ' to give ' +
+            return capitalize(askee.nameFor(asker)) + ' ' + asker.verb('try') + ' to give ' +
               askee.nameFor(item) + ' to you, but you don\'t take ' + item.them + '.';
           });
         }
@@ -1117,16 +1121,11 @@ var Adventure = (function() {
       if (i) this.informationQueue.push(i);
     };
 
-    Person.prototype.orYourself = function(item, name, youName) {
-      name = name || this.nameFor(item);
+    Person.prototype.nameFor = function(item, name, youName) {
+      name = name || (this.isKnown(item) ? item.definiteName : item.indefiniteName);
+      this.setKnown(item);
       if (this !== item) return name;
       return youName || 'yourself';
-    }
-
-    Person.prototype.nameFor = function(item, suppressKnowledge) {
-      var ret = this.isKnown(item) ? item.definiteName : item.indefiniteName
-      if (!suppressKnowledge) this.setKnown(item);
-      return ret;
     }
 
     a.newPerson = function(options) {
@@ -1176,7 +1175,7 @@ var Adventure = (function() {
         var objectMethodName = options.command.objectMethodName || false;
         command = function(object) {
           var subject = this;
-          var objectName = this.orYourself(object);
+          var objectName = this.nameFor(object);
           if (object && mustHave && !this.has(object)) {
             tell(this, "You don't have " + objectName + ".");
             return;
@@ -1285,6 +1284,7 @@ var Adventure = (function() {
         var items = allItems().filter(function(item) {
           return item.appearsInInventoryOf(subject);
         }).map(function(i) {
+          subject.setKnown(i);
           return i.indefiniteName;
         });
         var ret = (!items.length) ? "You don't have anything." : "You have " + series(items) + ".";
@@ -1602,6 +1602,9 @@ var Adventure = (function() {
       var interpretation = interpretInput(subject, str);
       if (interpretation.success) {
         var ret = subject.consumeInformationQueue();
+        interpretation.parameters.forEach(function(param) {
+          if (param.id) subject.setKnown(param);
+        });
         interpretation.func.apply(subject, interpretation.parameters);
         ret += subject.consumeInformationQueue();
         ret = ret.trim();
@@ -1710,6 +1713,8 @@ var Adventure = (function() {
       // the word "me" or "myself" can refer to the speaker
       if (subject === item) {
         kw = kw.concat(['me', 'myself', 'i']);
+      } else {
+        kw = kw.concat([item.them, item.themselves, item.they]);
       }
       for (var i = 0; i < kw.length; i++) {
         if (str === kw[i].toLowerCase())
@@ -1741,10 +1746,14 @@ var Adventure = (function() {
       var getItems = function() {
         if (!items) {
           items = subject.knownItems.slice();
-          items.sort(function(x, y) {
-            return +subject.canSee(y) - subject.canSee(x);
-          });
-          items.push.apply(items, objectValues(noExit));
+          items = items.reverse();
+          items = items.filter(function(i) {
+            return subject.canSee(i);
+          }).
+          concat(items.filter(function(i) {
+              return !subject.canSee(i);
+            }),
+            objectValues(noExit));
         }
         return items;
       };

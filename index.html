@@ -390,7 +390,7 @@
     var you = {};
     you.id = 'adventurer';
     you.name = 'Ms. Adventurer';
-    you.keywords = ['adventurer','ms adventurer'];
+    you.keywords = ['adventurer', 'ms adventurer'];
     you.pronoun = 'she';
     you = adventure.newPerson(you);
 
@@ -481,10 +481,10 @@
           return;
         }
         if (!subject.has(this)) {
-          tell(subject, "You don't have " + opener.definiteName + ".");
+          tell(subject, "You don't have " + subject.nameFor(opener) + ".");
           return;
         }
-        tell(subject, "You can't use " + opener.definiteName + " now.");
+        tell(subject, "You can't use " + subject.nameFor(opener) + " now.");
         return;
       }
       subject.open(object, this);
@@ -517,20 +517,20 @@
     soup.beOpenedBy = function(subject, instrument) {
       var soup = this;
       if (!subject.has(this)) {
-        tell(subject, "You don't have " + soup.definiteName + ".");
+        tell(subject, "You don't have " + subject.nameFor(soup) + ".");
         return;
       }
       if (!this.closed) {
-        tell(subject, A.capitalize(soup.definiteName) + " has already been opened.");
+        tell(subject, A.capitalize(subject.nameFor(soup)) + " has already been opened.");
         return;
       }
       if (!instrument) {
         tell(subject, "You try to rip the soup can open with your bare hands, but you can't.");
         return;
       }
-      var instrumentName = subject.orYourself(instrument);
+      var instrumentName = subject.nameFor(instrument);
       if (instrument !== canOpener) {
-        tell(subject, "You can't use " + instrumentName + " to open " + soup.definiteName + ".");
+        tell(subject, "You can't use " + instrumentName + " to open " + subject.nameFor(soup) + ".");
         return;
       }
       if (!subject.has(instrument)) {
@@ -540,7 +540,7 @@
       this.closed = false;
       tell(subject, "You successfully use " + instrumentName + " to open the can of soup.",
         function(witness) {
-          return A.capitalize(subject.definiteName) + ' ' + subject.verb('open') + ' ' + witness.nameFor(soup) +
+          return A.capitalize(witness.nameFor(subject)) + ' ' + subject.verb('open') + ' ' + witness.nameFor(soup) +
             ' with ' +
             witness.nameFor(instrument) + '.';
         }
@@ -559,7 +559,7 @@
     };
     soup.beUsedBy = function(subject, instrument) {
       if (!subject.has(this)) {
-        tell(subject, "You don't have " + soup.definiteName + ".");
+        tell(subject, "You don't have " + subject.nameFor(soup) + ".");
         return;
       }
       if (this.closed) {
@@ -575,7 +575,7 @@
     };
     soup.beEatenBy = function(subject) {
       if (!subject.has(this)) {
-        tell(subject, "You have to pick up " + soup.definiteName + " to eat it.");
+        tell(subject, "You have to pick up " + subject.nameFor(soup) + " to eat it.");
         return;
       }
       if (this.closed) {
@@ -585,7 +585,7 @@
       if (this.full) {
         this.full = false;
         tell(subject, "You eat the soup.  Yum, tasty room-temperature soup!", function(witness) {
-          return A.capitalize(subject.definiteName) + ' ' + subject.verb('eat') + ' ' + witness.nameFor(soup) +
+          return A.capitalize(witness.nameFor(subject)) + ' ' + subject.verb('eat') + ' ' + witness.nameFor(soup) +
             '.';
         });
         return;
@@ -637,8 +637,12 @@
     bed.canBeTaken = false;
     bed.beUsedBy = function(subject) {
       tell(subject, "You lie down on the bed and fall asleep for a few minutes.  You wake up feeling refreshed.",
-        A.capitalize(subject.definiteName) + ' ' + subject.verb('lie') + ' down on the bed and ' + subject.verb(
-          'sleep') + ' for a few minutes and then ' + subject.verb('get') + ' up.');
+        function(witness) {
+          return A.capitalize(witness.nameFor(subject)) + ' ' + subject.verb('lie') + ' down on the bed and ' +
+            subject.verb(
+              'sleep') + ' for a few minutes and then ' + subject.verb('get') + ' up.';
+        }
+      );
       return;
     };
     bed.location = bedroom;
@@ -688,7 +692,7 @@
         return;
       }
       if (!subject.canSee(object)) {
-        tell(subject, "You can't see " + subject.orYourself(object) + ".");
+        tell(subject, "You can't see " + subject.nameFor(object) + ".");
         return;
       }
       if (object === cabinet) {
@@ -699,7 +703,7 @@
         tell(subject, "The cabinet is already unlocked.");
         return;
       }
-      tell(subject, "You try to use the key on " + subject.orYourself(object) + " but it doesn't do anything.");
+      tell(subject, "You try to use the key on " + subject.nameFor(object) + " but it doesn't do anything.");
       return;
     }
     key.location = teddyBear;
@@ -719,7 +723,7 @@
       } else {
         ret += ' It is open ';
         var items = cabinet.listContents(subject).map(function(it) {
-          return subject.orYourself(it, it.indefiniteName, 'you');
+          return subject.nameFor(it, it.indefiniteName, 'you');
         });
         if (items.length == 0) {
           ret += 'and empty.';
@@ -747,11 +751,11 @@
         return;
       }
       if (!subject.has(instrument)) {
-        tell(subject, "You don't have " + subject.orYourself(instrument) + ".");
+        tell(subject, "You don't have " + subject.nameFor(instrument) + ".");
         return;
       }
       if (instrument !== key) {
-        tell(subject, "You try to unlock the cabinet with " + subject.orYourself(instrument) +
+        tell(subject, "You try to unlock the cabinet with " + subject.nameFor(instrument) +
           " but it remains locked.");
         return;
       }
@@ -762,8 +766,9 @@
       });
       tell(subject, "You turn the key in the cabinet's lock until you hear a click.  The cabinet springs open!",
         function(witness) {
-          return A.capitalize(subject.definiteName) + ' ' + subject.verb('open') + ' the cabinet with ' + witness.nameFor(
-            key) + '.';
+          return A.capitalize(witness.nameFor(subject)) + ' ' + subject.verb('open') + ' the cabinet with ' +
+            witness.nameFor(
+              key) + '.';
         });
       return;
     }
@@ -776,14 +781,17 @@
       cabinet.allContents().forEach(function(it) {
         it.hidden = true;
       });
-      tell(subject, "You have closed the cabinet.", A.capitalize(subject.definiteName) + ' ' + subject.verb('has') +
-        ' closed the cabinet.');
+      tell(subject, "You have closed the cabinet.", function(witness) {
+        return A.capitalize(witness.nameFor(subject)) + ' ' + subject.verb('has') +
+          ' closed the cabinet.';
+      });
       return;
     };
     cabinet.beAskedToTake = function(item, subject, doTell) {
       if (!cabinet.closed) {
         var info = function(witness) {
-          return A.capitalize(subject.definiteName) + ' ' + subject.verb('has') + ' put ' + witness.nameFor(item) +
+          return A.capitalize(witness.nameFor(subject)) + ' ' + subject.verb('has') + ' put ' + witness.nameFor(
+              item) +
             ' into the cabinet.';
         };
         if (doTell) tell(subject, info, info);
@@ -846,7 +854,7 @@
           "revealed!",
           function(witness) {
             witness.setKnown(holeInTheWall);
-            return A.capitalize(subject.definiteName) + ' ' + subject.verb('push') +
+            return A.capitalize(witness.nameFor(subject)) + ' ' + subject.verb('push') +
               ' the boulder along the wall, revealing a large hole leading east.';
           });
         return;
@@ -893,18 +901,18 @@ return;
 
           if (doTell) {
             var info = function(witness) {
-              return A.capitalize(subject.definiteName) + ' ' + subject.verb('have') + ' put ' + witness.nameFor(
+              return A.capitalize(witness.nameFor(subject)) + ' ' + subject.verb('have') + ' put ' + witness.nameFor(
                 item) + ' into ' + witness.nameFor(cage) + '.';
             };
             tell(subject, info, info);
           }
           return true;
         }
-        if (doTell) tell(subject, "You can't put " + item.definiteName + " into the closed cage.");
+        if (doTell) tell(subject, "You can't put " + subject.nameFor(item) + " into the closed cage.");
         return false;
       },
       beAskedToGive: function(item, subject, doTell) {
-        if (!this.closed || item===this) {
+        if (!this.closed || item === this) {
           return this.superMethod('beAskedToGive')(item, subject, doTell);
         }
         if (doTell) tell(subject, "You can't take anything out of the cage when it is closed.");
