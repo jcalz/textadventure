@@ -36,24 +36,6 @@ var Adventure;
     return strs.slice(0, -1).join(', ') + ', ' + conjunction + ' ' + strs[strs.length - 1];
   }
   A.series = series;
-  var gram = function(v) {
-    var f = function(nom) {
-      if (!nom) {
-        var o = {};
-        objectValues(v).forEach(function(k) {
-          o[k] = true;
-        });
-        return Object.keys(o).join('|');
-      }
-      if (typeof nom === 'object')
-        nom = nom.pronoun;
-      nom = nom.toLowerCase();
-      if (nom in v)
-        return v[nom];
-      return v.it;
-    };
-    return f;
-  };
 
   function addS(name) {
     if ((/[^aeiou]y$/i).test(name)) {
@@ -64,161 +46,6 @@ var Adventure;
       return name + 's';
     }
   }
-  var are = gram({
-    i: 'am',
-    we: 'are',
-    you: 'are',
-    he: 'is',
-    she: 'is',
-    it: 'is',
-    they: 'are'
-  });
-  var were = gram({
-    i: 'was',
-    we: 'were',
-    you: 'were',
-    he: 'was',
-    she: 'was',
-    it: 'was',
-    they: 'were'
-  });
-  var have = gram({
-    i: 'have',
-    we: 'have',
-    you: 'have',
-    he: 'has',
-    she: 'has',
-    it: 'has',
-    they: 'have'
-  });
-  var re = gram({
-    i: 'm',
-    we: 're',
-    you: 're',
-    he: 's',
-    she: 's',
-    it: 's',
-    they: 're'
-  });
-  var ve = gram({
-    i: 've',
-    we: 've',
-    you: 've',
-    he: 's',
-    she: 's',
-    it: 's',
-    they: 've'
-  });
-  var thirdSing = gram({
-    i: false,
-    we: false,
-    you: false,
-    he: true,
-    she: true,
-    it: true,
-    they: false
-  });
-  var verb = function(vb, nom) {
-    if (typeof vb !== 'string')
-      return '';
-    var vbl = vb.toLowerCase();
-    if (vbl == 'are')
-      return are(nom);
-    if (vbl == 'were')
-      return were(nom);
-    if (vbl == 'have')
-      return have(nom);
-    if (vbl === 're')
-      return re(nom);
-    if (vbl === 've')
-      return ve(nom);
-    if (vbl === "'re")
-      return "'" + re(nom);
-    if (vbl === "'ve")
-      return "'" + ve(nom);
-    if (!nom)
-      return vb + '|' + addS(vb);
-    if (thirdSing(nom))
-      return addS(vb);
-    return vb;
-  };
-  var grammar = {
-    they: gram({
-      i: 'I',
-      we: 'we',
-      you: 'you',
-      he: 'he',
-      she: 'she',
-      it: 'it',
-      they: 'they'
-    }),
-    them: gram({
-      i: 'me',
-      we: 'us',
-      you: 'you',
-      he: 'him',
-      she: 'her',
-      it: 'it',
-      they: 'them'
-    }),
-    their: gram({
-      i: 'my',
-      we: 'our',
-      you: 'your',
-      he: 'his',
-      she: 'her',
-      it: 'its',
-      they: 'their'
-    }),
-    theirs: gram({
-      i: 'mine',
-      we: 'ours',
-      you: 'yours',
-      he: 'his',
-      she: 'hers',
-      it: 'its',
-      they: 'theirs'
-    }),
-    themselves: gram({
-      i: 'myself',
-      we: 'ourselves',
-      you: 'yourself',
-      he: 'himself',
-      she: 'herself',
-      it: 'itself',
-      they: 'themselves'
-    }),
-    verb: verb,
-    are: are,
-    were: were,
-    have: have,
-    re: re,
-    ve: ve,
-    theyre: function(x) {
-      return grammar.they(x) + "'" + grammar.re(x);
-    },
-    theyve: function(x) {
-      return grammar.they(x) + "'" + grammar.ve(x);
-    },
-    toPlural: gram({
-      i: 'we',
-      we: 'we',
-      you: 'you',
-      he: 'they',
-      she: 'they',
-      it: 'they',
-      they: 'they'
-    }),
-    isPlural: gram({
-      i: false,
-      we: true,
-      you: false,
-      he: false,
-      she: false,
-      it: false,
-      they: true
-    })
-  };
   // mutability for options
   var MutabilityMarker = (function() {
     function MutabilityMarker(mutable, object) {
@@ -227,7 +54,6 @@ var Adventure;
     }
     return MutabilityMarker;
   }());
-  A.MutabilityMarker = MutabilityMarker;
 
   function mutable(obj, enforceIfWrapped) {
     if (obj instanceof MutabilityMarker) {
@@ -285,20 +111,42 @@ var Adventure;
     });
   }
 
-  function getDefaultNames(name, pronoun) {
-    var ret = {};
-    var isPlural = grammar.isPlural(pronoun);
-    return {
-      pluralName: isPlural ? name : addS(name),
-      keywords: [name.toLowerCase().replace(/[^a-z0-9 ]/g, '')],
-      definiteName: 'the ' + name,
-      indefiniteName: isPlural ? name : ('aeiou'.indexOf(name.charAt(0).toLowerCase()) >=
-        0 ? 'an ' :
-        'a ') + name
-    };
-  };
-
   function Adventure() {
+    function grammarize(itemOrPronoun, mapping) {
+      if (typeof itemOrPronoun !== 'string') {
+        itemOrPronoun = itemOrPronoun.pronoun;
+      }
+      var pronoun = itemOrPronoun.toLowerCase();
+      var index;
+      if (!(pronoun in mapping))
+        pronoun = 'it';
+      return mapping[pronoun];
+    }
+
+    function isPlural(pronoun) {
+      return grammarize(pronoun, {
+        i: false,
+        we: true,
+        you: false,
+        he: false,
+        she: false,
+        it: false,
+        they: true
+      });
+    }
+
+    function getDefaultNames(name, pronoun) {
+      var ret = {};
+      var plural = isPlural(pronoun);
+      return {
+        pluralName: plural ? name : addS(name),
+        keywords: [name.toLowerCase().replace(/[^a-z0-9 ]/g, '')],
+        definiteName: 'the ' + name,
+        indefiniteName: plural ? name : ('aeiou'.indexOf(name.charAt(0).toLowerCase()) >=
+          0 ? 'an ' :
+          'a ') + name
+      };
+    };
     var a = this;
     a.maxNesting = 256;
     // KEEP A MAP OF ALL DIRECTIONS IN THE ADVENTURE
@@ -431,6 +279,8 @@ var Adventure;
       });
     };
     // serialize adventure
+    // 
+    var serializationPrefix = 'I!';
     var serialize = function() {
       var serializedMap = {};
       Object.keys(itemMap).forEach(function(k) {
@@ -485,397 +335,594 @@ var Adventure;
         });
       }
     };
-
-    function Item(options, noEnforceImmutables) {
-      var item = this;
-      this.adventure = a;
-      if (typeof options === 'string') {
-        options = {
-          id: options
+    var Item = (function() {
+      function Item(options, noEnforceImmutables) {
+        this.adventure = a;
+        var item = this;
+        if (typeof options === 'string') {
+          options = {
+            id: options
+          };
+        }
+        options = Object.assign({}, options || {});
+        var name = unwrap(options.name) || unwrap(options.id) || 'item';
+        options.name = immutable(options.name || name);
+        if (options.id && unwrap(options.id) in itemMap)
+          throw new Error('cannot reuse id "' + unwrap(options.id) +
+            '"');
+        var baseId = unwrap(options.id) || name || 'item';
+        var id = getNewId(baseId);
+        options.id = immutable(id);
+        itemMap[id] = this;
+        // prevent a property from being saved/loaded as state or modified
+        var immutableProperties = {};
+        this.getImmutableProperties = function() {
+          return immutableProperties;
         };
+        var pronoun = unwrap(options.pronoun) || 'it';
+        var defaultNames = getDefaultNames(name, pronoun);
+        options.description = immutable(options.description || null);
+        options.keywords = immutable(options.keywords || defaultNames.keywords);
+        options.definiteName = immutable(options.definiteName || defaultNames.definiteName);
+        options.indefiniteName = immutable(options.indefiniteName || defaultNames.indefiniteName);
+        options.pluralName = immutable(options.pluralName || defaultNames.pluralName);
+        options.pronoun = immutable(options.pronoun || pronoun);
+        options.canBeTaken = immutable('canBeTaken' in options ? options.canBeTaken : true);
+        options.location = (unwrap(options.canBeTaken) ? mutable : immutable)(options.location || null);
+        options.hidden = 'hidden' in options ? mutable(options.hidden) : mutable(false);
+        options.unlisted = immutable('unlisted' in options ? options.unlisted : false);
+        options.playableCharacter = immutable(('playableCharacter' in options) ? options.playableCharacter :
+          false);
+        options.alive = immutable(('alive' in options) ? options.alive : false);
+        options.wantsToTake = mutable(options.wantsToTake || {});
+        options.wantsToGive = mutable(options.wantsToGive || {});
+        if (unwrap(options.playableCharacter))
+          options.informationQueue = mutable([]);
+        options.isItem = immutable(true);
+        setOptions(item, options);
+        var location = this.location;
+        var o = {
+          configurable: true,
+          enumerable: true,
+          get: function() {
+            var ret = location;
+            if (typeof location === 'string')
+              ret = itemMap[location];
+            if (!ret)
+              ret = null;
+            return ret;
+          },
+          set: function(l) {
+            if (item.ultimatelyContains(l, true)) {
+              throw new Error(capitalize(item.definiteName) + " ultimately contains " + capitalize(l.name) +
+                " so " + item.they + " cannot be contained by " +
+                ((l === item) ? l.themselves : l.them) + " without making a loop.");
+            }
+            location = l;
+          }
+        };
+        Object.defineProperty(item, 'location', o);
+        if (!noEnforceImmutables)
+          enforceImmutables(item);
       }
-      options = Object.assign({}, options || {});
-      var name = unwrap(options.name) || unwrap(options.id) || 'item';
-      options.name = immutable(options.name || name);
-      if (options.id && unwrap(options.id) in itemMap)
-        throw new Error('cannot reuse id "' + unwrap(options.id) +
-          '"');
-      var baseId = unwrap(options.id) || name || 'item';
-      var id = getNewId(baseId);
-      options.id = immutable(id);
-      itemMap[id] = this;
-      // prevent a property from being saved/loaded as state or modified
-      var immutableProperties = {};
-      this.getImmutableProperties = function() {
-        return immutableProperties;
-      };
-      var pronoun = unwrap(options.pronoun) || 'it';
-      var defaultNames = getDefaultNames(name, pronoun);
-      options.description = immutable(options.description || null);
-      options.keywords = immutable(options.keywords || defaultNames.keywords);
-      options.definiteName = immutable(options.definiteName || defaultNames.definiteName);
-      options.indefiniteName = immutable(options.indefiniteName || defaultNames.indefiniteName);
-      options.pluralName = immutable(options.pluralName || defaultNames.pluralName);
-      options.pronoun = immutable(options.pronoun || pronoun);
-      options.canBeTaken = immutable('canBeTaken' in options ? options.canBeTaken : true);
-      options.location = (unwrap(options.canBeTaken) ? mutable : immutable)(options.location || null);
-      options.hidden = 'hidden' in options ? mutable(options.hidden) : mutable(false);
-      options.unlisted = immutable('unlisted' in options ? options.unlisted : false);
-      options.playableCharacter = immutable(('playableCharacter' in options) ? options.playableCharacter : false);
-      options.alive = immutable(('alive' in options) ? options.alive : false);
-      options.wantsToTake = mutable(options.wantsToTake || {});
-      options.wantsToGive = mutable(options.wantsToGive || {});
-      if (unwrap(options.playableCharacter))
-        options.informationQueue = mutable([]);
-      options.isItem = immutable(true);
-      setOptions(item, options);
-      var location = this.location;
-      var o = {
-        configurable: true,
-        enumerable: true,
+      Object.defineProperty(Item.prototype, "them", {
         get: function() {
-          var ret = location;
-          if (typeof location === 'string')
-            ret = itemMap[location];
-          if (!ret)
-            ret = null;
-          return ret;
-        },
-        set: function(l) {
-          if (item.ultimatelyContains(l, true)) {
-            throw new Error(capitalize(item.definiteName) + " ultimately contains " + capitalize(l.name) +
-              " so " + item.they + " cannot be contained by " +
-              ((l === item) ? l.themselves : l.them) + " without making a loop.");
-          }
-          location = l;
-        }
-      };
-      Object.defineProperty(item, 'location', o);
-      if (!noEnforceImmutables)
-        enforceImmutables(item);
-    };
-    Item.prototype.toString = function() {
-      return this.definiteName;
-    };
-    Object.keys(grammar).forEach(function(k) {
-      if (k === 'verb')
-        return;
-      Object.defineProperty(Item.prototype, k, {
-        enumerable: true,
-        configurable: false,
-        get: function() {
-          var args = Array.from(arguments);
-          args.push(this);
-          return grammar[k].apply(null, args);
-        }
-      });
-    });
-    Item.prototype.verb = function(vb) {
-      return grammar.verb(vb, this);
-    };
-    Item.prototype.getExits = function() {
-      var here = this;
-      return allItems().filter(function(it) {
-        return (it instanceof Exit) && (it.location === here) && (!it.hidden);
-      });
-    };
-    Item.prototype.beTakenBy = function(subject) {
-      var item = this;
-      if (!this.canBeTaken) {
-        tell(subject, "You can't pick up " + subject.nameFor(item) + ".");
-        return;
-      }
-      if (subject.has(this)) {
-        tell(subject, "You already have " + subject.nameFor(item) + ".");
-        return;
-      }
-      subject.wantsToTake[this.id] = true;
-      // prevent trying to create a loop
-      if (this.ultimatelyContains(subject)) {
-        tell(subject, "You can't take " +
-          subject.nameFor(this) + ((subject === this) ? "." : " because " +
-            this.they + " already " + (this.alive ? this.have : this.verb('contain'))) + " you.");
-        return;
-      }
-      var locationChain = this.locationChain();
-      for (var i = 0; i < locationChain.length; i++) {
-        var loc = locationChain[i];
-        if (subject === loc)
-          continue; // you say yes to yourself
-        if (!loc.beAskedToGive(this, subject, false)) {
-          loc.beAskedToGive(this, subject, true);
-          return;
-        }
-      }
-      // one final direct check
-      var success = false;
-      loc = this.location;
-      if (!loc) {
-        tell(subject, "You have picked up " + subject.nameFor(item) + ".", function(witness) {
-          return capitalize(witness.nameFor(subject)) + ' ' + subject.have + ' picked up ' + witness.nameFor(
-              item) +
-            '.';
-        });
-        success = true;
-      } else if (this.location.beAskedToGive(this, subject, true)) {
-        success = true;
-      }
-      if (success) {
-        this.location = subject;
-        delete subject.wantsToTake[this.id];
-        delete((loc || {}).wantsToGive || {})[this.id];
-      }
-    };
-    Item.prototype.beGivenBy = function(subject, recipient) {
-      if (!subject.canSee(recipient)) {
-        tell(subject, "You can't see " + subject.nameFor(recipient) + " here.");
-        return;
-      }
-      if (subject === recipient) {
-        tell(subject, "You already have " + subject.nameFor(this) + ".");
-        return;
-      }
-      if (!subject.wantsToGive[this.id]) {
-        subject.wantsToGive[this.id] = {};
-      }
-      subject.wantsToGive[this.id][recipient.id] = true;
-      // prevent trying to create a loop
-      if (this.ultimatelyContains(recipient)) {
-        tell(subject, "You can't " + (recipient.alive ? 'give ' : 'put ') +
-          subject.nameFor(this) + (recipient.alive ? ' to ' : ' into ') +
-          subject.nameFor(recipient, this == recipient ? recipient.themselves : subject.nameFor(recipient)) +
-          ((recipient === this) ? "." :
-            " because " + subject.nameFor(this, this.they + " already " + (this.alive ? this.have : this.verb(
-              'contain')), "you already have") + " " +
-            subject.nameFor(recipient, recipient.them) + "."));
-        return;
-      }
-      var locationChain = recipient.locationChain();
-      for (var i = 0; i < locationChain.length; i++) {
-        var loc = locationChain[i];
-        if (subject === loc)
-          continue; // you say yes to yourself
-        if (!loc.beAskedToTake(this, subject, false)) {
-          loc.beAskedToTake(this, subject, true);
-          return;
-        }
-      }
-      // one final direct check
-      if (recipient.beAskedToTake(this, subject, true)) {
-        this.location = recipient;
-        delete subject.wantsToGive[this.id];
-        delete(recipient.wantsToTake || {})[this.id];
-      }
-    };
-    Item.prototype.beDroppedBy = function(subject) {
-      this.beGivenBy(subject, subject.location);
-    };
-    Item.prototype.beExaminedBy = function(subject) {
-      var item = this;
-      var ret = '';
-      if (subject.location === item) {
-        ret += titleCase(item.name) + '\n';
-      }
-      ret += item.description || (subject.nameFor(item, capitalize(item.theyre), "You're") + ' just ' +
-        subject.nameFor(item, item.indefiniteName) + '.');
-      subject.setKnown(item);
-      // describe exits with directions
-      var exits = item.getExits().filter(function(ex) {
-        return ex.direction;
-      });
-      if (exits.length > 0) {
-        var exitTypes = {};
-        exits.forEach(function(ex) {
-          var type = ex.pluralName;
-          if (!(type in exitTypes)) {
-            exitTypes[type] = {
-              single: ex.indefiniteName,
-              multiple: ex.pluralName,
-              directions: []
-            };
-          }
-          exitTypes[type].directions.push(directionName(ex.direction));
-        });
-        Object.keys(exitTypes).forEach(function(type) {
-          if (subject.location === item) {
-            ret += ' There ';
-            ret += exitTypes[type].directions.length == 1 ? 'is ' + exitTypes[type].single : 'are ' +
-              exitTypes[type].multiple;
-          } else {
-            ret += ' ' + capitalize(item.they) + ' ' + item.have;
-            ret += exitTypes[type].directions.length == 1 ? exitTypes[type].single : exitTypes[type].multiple;
-          }
-          ret += ' leading ';
-          ret += series(exitTypes[type].directions);
-          ret += '.';
-        });
-      }
-      // describe non-exits or exits with no direction, but not the subject
-      var items = item.listContents(subject).filter(function(it) {
-        return (!(it instanceof Exit) || (!it.direction)) && it !== subject;
-      });
-      var itemNames = items.map(function(it) {
-        return subject.nameFor(it, it.indefiniteName, 'you');
-      });
-      if (items.length > 0) {
-        if (subject.location === item) {
-          ret += ' ' + capitalize(series(itemNames)) + ' ' + ((items.length > 1) ? 'are' : items[0].are) +
-            ' here.';
-        } else {
-          ret += ' ' + subject.nameFor(item, capitalize(item.pronoun), 'You') + ' ' + ((item.alive) ?
-              subject.nameFor(item, item.have, 'have') : item.verb('contain')) +
-            ' ' + series(itemNames) + '.';
-        }
-      }
-      tell(subject, ret);
-    };
-    Item.prototype.allContents = function() {
-      var here = this;
-      return allItems().filter(function(it) {
-        return it.location === here;
-      });
-    };
-    Item.prototype.listContents = function(subject) {
-      var here = this;
-      var items = allItems().filter(function(it) {
-        return it.location === here && !it.hidden;
-      });
-      items.forEach(function(i) {
-        subject.setKnown(i);
-      });
-      items = items.filter(function(it) {
-        return !(it.unlisted);
-      });
-      return items;
-    };
-    Item.prototype.ultimatelyContains = function(item, excludingItself) {
-      var cnt = 0;
-      for (var loc = (excludingItself ? item.location : item); loc; loc = loc.location) {
-        cnt++;
-        if (cnt > a.maxNesting) {
-          throw new Error('Location nesting of more than ' + a.maxNesting + ' exceeded!');
-        }
-        if (loc === this)
-          return true;
-      }
-      return false;
-    };
-    Item.prototype.locationChain = function() {
-      var ids = {};
-      var ret = [];
-      for (var loc = this; loc && loc.id && (!(loc.id in ids)); loc = loc.location) {
-        ids[loc.id] = true;
-        ret.push(loc);
-      }
-      return ret;
-    };
-    // return true if yes, false if no
-    Item.prototype.beAskedToGive = function(item, asker, doTell) {
-      var holder = this;
-      if (doTell)
-        tell(asker, "You have taken " + asker.nameFor(item) + " from " + asker.nameFor(this) +
-          ".",
-          function(witness) {
-            return capitalize(witness.nameFor(asker)) + ' ' + asker.have + ' taken ' + witness.nameFor(item) +
-              ' from ' +
-              witness.nameFor(holder) + '.';
+          return grammarize(this, {
+            i: 'me',
+            we: 'us',
+            you: 'you',
+            he: 'him',
+            she: 'her',
+            it: 'it',
+            they: 'them'
           });
-      return true;
-    };
-    Item.prototype.beAskedToTake = function(item, asker, doTell) {
-      if (doTell)
-        tell(asker, "You can't " + (this.alive ? 'give ' : 'put ') + asker.nameFor(item) + (this.alive ?
-          ' to ' : ' into ') + asker.nameFor(this) + ".");
-      return false;
-    };
-    Item.prototype.ultimateLocation = function() {
-      var cnt = 0;
-      for (var loc = this; loc.location; loc = loc.location) {
-        cnt++;
-        if (cnt > a.maxNesting) {
-          throw new Error('Location nesting of more than ' + a.maxNesting + ' exceeded!');
-        }
-      }
-      return loc;
-    };
-    Item.prototype.canSee = function(item) {
-      return !item.hidden && (this.ultimateLocation() === item.ultimateLocation());
-    };
-    Item.prototype.has = function(item) {
-      return !item.hidden && item.location === this; //(this.ultimatelyContains(item));
-    };
-    Item.prototype.appearsInInventoryOf = function(subject) {
-      return subject.has(this);
-    };
-    Item.prototype.superMethod = function(name) {
-      var method = this[name];
-      var proto = Object.getPrototypeOf(this);
-      while (true) {
-        var superMethod = proto[name];
-        if (!superMethod)
-          return superMethod;
-        if (superMethod !== method)
-          return superMethod.bind(this);
-        proto = Object.getPrototypeOf(proto);
-        if (!proto)
-          return void(0);
-      }
-    };
-    // copy the state of this item into a string
-    var serializationPrefix = 'I!';
-    // return a string representing the current state of this item, or falsy value if no state to serialize
-    Item.prototype.serialize = function() {
-      var item = this;
-      var ret = JSON.stringify(this, function(k, v) {
-        if ((typeof this.getImmutableProperties === 'function') && (k in this.getImmutableProperties()))
-          return; // don't serialize immutables
-        if (v === a)
-          return; // don't serialize the adventure object
-        if (k && v && (v.adventure === a)) {
-          return serializationPrefix + '#' + v.id;
-        }
-        if (typeof v === 'string' && v.startsWith(serializationPrefix)) {
-          return serializationPrefix + '?' + v;
-        }
-        return v;
+        },
+        enumerable: true,
+        configurable: true
       });
-      if (ret !== '{}')
-        return ret;
-      return false;
-    };
-    // restore this item to the state represented by the passed-in string  
-    Item.prototype.deserialize = function(state) {
-      var stateObject = JSON.parse(state, function(k, v) {
-        if ((typeof v === 'string') && (v.startsWith(serializationPrefix))) {
-          var c = v.charAt(serializationPrefix.length);
-          var s = v.substring(serializationPrefix.length + 1);
-          if (c == '#') {
-            return itemMap[s];
-          } else {
-            return s;
+      Object.defineProperty(Item.prototype, "they", {
+        get: function() {
+          return this.pronoun;
+        },
+        enumerable: true,
+        configurable: true
+      });
+      Object.defineProperty(Item.prototype, "are", {
+        get: function() {
+          return grammarize(this, {
+            i: 'am',
+            we: 'are',
+            you: 'are',
+            he: 'is',
+            she: 'is',
+            it: 'is',
+            they: 'are'
+          });
+        },
+        enumerable: true,
+        configurable: true
+      });
+      Object.defineProperty(Item.prototype, "were", {
+        get: function() {
+          return grammarize(this, {
+            i: 'was',
+            we: 'were',
+            you: 'were',
+            he: 'was',
+            she: 'was',
+            it: 'was',
+            they: 'were'
+          });
+        },
+        enumerable: true,
+        configurable: true
+      });
+      Object.defineProperty(Item.prototype, "have", {
+        get: function() {
+          return grammarize(this, {
+            i: 'have',
+            we: 'have',
+            you: 'have',
+            he: 'has',
+            she: 'has',
+            it: 'has',
+            they: 'have'
+          });
+        },
+        enumerable: true,
+        configurable: true
+      });
+      Object.defineProperty(Item.prototype, "re", {
+        get: function() {
+          return grammarize(this, {
+            i: 'm',
+            we: 're',
+            you: 're',
+            he: 's',
+            she: 's',
+            it: 's',
+            they: 're'
+          });
+        },
+        enumerable: true,
+        configurable: true
+      });
+      Object.defineProperty(Item.prototype, "ve", {
+        get: function() {
+          return grammarize(this, {
+            i: 've',
+            we: 've',
+            you: 've',
+            he: 's',
+            she: 's',
+            it: 's',
+            they: 've'
+          });
+        },
+        enumerable: true,
+        configurable: true
+      });
+      Object.defineProperty(Item.prototype, "thirdSing", {
+        get: function() {
+          return grammarize(this, {
+            i: false,
+            we: false,
+            you: false,
+            he: true,
+            she: true,
+            it: true,
+            they: false
+          });
+        },
+        enumerable: true,
+        configurable: true
+      });
+      Object.defineProperty(Item.prototype, "their", {
+        get: function() {
+          return grammarize(this, {
+            i: 'my',
+            we: 'our',
+            you: 'your',
+            he: 'his',
+            she: 'her',
+            it: 'its',
+            they: 'their'
+          });
+        },
+        enumerable: true,
+        configurable: true
+      });
+      Object.defineProperty(Item.prototype, "theirs", {
+        get: function() {
+          return grammarize(this, {
+            i: 'mine',
+            we: 'ours',
+            you: 'yours',
+            he: 'his',
+            she: 'hers',
+            it: 'its',
+            they: 'theirs'
+          });
+        },
+        enumerable: true,
+        configurable: true
+      });
+      Object.defineProperty(Item.prototype, "themselves", {
+        get: function() {
+          return grammarize(this, {
+            i: 'myself',
+            we: 'ourselves',
+            you: 'yourself',
+            he: 'himself',
+            she: 'herself',
+            it: 'itself',
+            they: 'themselves'
+          });
+        },
+        enumerable: true,
+        configurable: true
+      });
+      Object.defineProperty(Item.prototype, "theyre", {
+        get: function() {
+          return this.they + "'" + this.re;
+        },
+        enumerable: true,
+        configurable: true
+      });;
+      Object.defineProperty(Item.prototype, "theyve", {
+        get: function() {
+          return this.they + "'" + this.ve;
+        },
+        enumerable: true,
+        configurable: true
+      });;
+      Object.defineProperty(Item.prototype, "toPlural", {
+        get: function() {
+          return grammarize(this, {
+            i: 'we',
+            we: 'we',
+            you: 'you',
+            he: 'they',
+            she: 'they',
+            it: 'they',
+            they: 'they'
+          });
+        },
+        enumerable: true,
+        configurable: true
+      });
+      Object.defineProperty(Item.prototype, "isPlural", {
+        get: function() {
+          return isPlural(this.pronoun);
+        },
+        enumerable: true,
+        configurable: true
+      });;
+      Item.prototype.toString = function() {
+        return this.definiteName;
+      };
+      Item.prototype.verb = function(vb) {
+        var vbl = vb.toLowerCase();
+        if (vbl == 'are')
+          return this.are;
+        if (vbl == 'were')
+          return this.were;
+        if (vbl == 'have')
+          return this.have;
+        if (vbl === 're')
+          return this.re;
+        if (vbl === 've')
+          return this.ve;
+        if (vbl === "'re")
+          return "'" + this.re;
+        if (vbl === "'ve")
+          return "'" + this.ve;
+        if (this.thirdSing)
+          return addS(vb);
+        return vb;
+      };
+      Item.prototype.getExits = function() {
+        var here = this;
+        return allItems().filter(function(it) {
+          return (it instanceof Exit) && (it.location === here) && (!it.hidden);
+        });
+      };;
+      Item.prototype.beTakenBy = function(subject) {
+        var item = this;
+        if (!this.canBeTaken) {
+          tell(subject, "You can't pick up " + subject.nameFor(item) + ".");
+          return;
+        }
+        if (subject.has(this)) {
+          tell(subject, "You already have " + subject.nameFor(item) + ".");
+          return;
+        }
+        subject.wantsToTake[this.id] = true;
+        // prevent trying to create a loop
+        if (this.ultimatelyContains(subject)) {
+          tell(subject, "You can't take " +
+            subject.nameFor(this) + ((subject === this) ? "." : " because " +
+              this.they + " already " + (this.alive ? this.have : this.verb('contain'))) + " you.");
+          return;
+        }
+        var locationChain = this.locationChain();
+        for (var i = 0; i < locationChain.length; i++) {
+          var loc = locationChain[i];
+          if (subject === loc)
+            continue; // you say yes to yourself
+          if (!loc.beAskedToGive(this, subject, false)) {
+            loc.beAskedToGive(this, subject, true);
+            return;
           }
         }
-        return v;
-      });
-      var item = this;
-      Object.keys(stateObject).forEach(function(k) {
-        if (!(k in item.getImmutableProperties())) {
-          item[k] = stateObject[k];
+        // one final direct check
+        var success = false;
+        loc = this.location;
+        if (!loc) {
+          tell(subject, "You have picked up " + subject.nameFor(item) + ".", function(witness) {
+            return capitalize(witness.nameFor(subject)) + ' ' + subject.have + ' picked up ' + witness.nameFor(
+                item) +
+              '.';
+          });
+          success = true;
+        } else if (this.location.beAskedToGive(this, subject, true)) {
+          success = true;
         }
-      });
-    };
-    Item.prototype.newBackgroundItem = function(options) {
-      options = options || {};
-      if (!('unlisted' in options))
-        options.unlisted = immutable(true);
-      if (!('hidden' in options))
-        options.hidden = immutable(false);
-      if (!('canBeTaken' in options))
-        options.canBeTaken = immutable(false);
-      if (!('location' in options))
-        options.location = immutable(this);
-      return new Item(options);
-    };
+        if (success) {
+          this.location = subject;
+          delete subject.wantsToTake[this.id];
+          delete((loc || {}).wantsToGive || {})[this.id];
+        }
+      };;
+      Item.prototype.beGivenBy = function(subject, recipient) {
+        if (!subject.canSee(recipient)) {
+          tell(subject, "You can't see " + subject.nameFor(recipient) + " here.");
+          return;
+        }
+        if (subject === recipient) {
+          tell(subject, "You already have " + subject.nameFor(this) + ".");
+          return;
+        }
+        if (!subject.wantsToGive[this.id]) {
+          subject.wantsToGive[this.id] = {};
+        }
+        subject.wantsToGive[this.id][recipient.id] = true;
+        // prevent trying to create a loop
+        if (this.ultimatelyContains(recipient)) {
+          tell(subject, "You can't " + (recipient.alive ? 'give ' : 'put ') +
+            subject.nameFor(this) + (recipient.alive ? ' to ' : ' into ') +
+            subject.nameFor(recipient, this == recipient ? recipient.themselves : subject.nameFor(recipient)) +
+            ((recipient === this) ? "." :
+              " because " + subject.nameFor(this, this.they + " already " + (this.alive ? this.have : this.verb(
+                'contain')), "you already have") + " " +
+              subject.nameFor(recipient, recipient.them) + "."));
+          return;
+        }
+        var locationChain = recipient.locationChain();
+        for (var i = 0; i < locationChain.length; i++) {
+          var loc = locationChain[i];
+          if (subject === loc)
+            continue; // you say yes to yourself
+          if (!loc.beAskedToTake(this, subject, false)) {
+            loc.beAskedToTake(this, subject, true);
+            return;
+          }
+        }
+        // one final direct check
+        if (recipient.beAskedToTake(this, subject, true)) {
+          this.location = recipient;
+          delete subject.wantsToGive[this.id];
+          delete(recipient.wantsToTake || {})[this.id];
+        }
+      };;
+      Item.prototype.beDroppedBy = function(subject) {
+        this.beGivenBy(subject, subject.location);
+      };
+      Item.prototype.beExaminedBy = function(subject) {
+        var item = this;
+        var ret = '';
+        if (subject.location === item) {
+          ret += titleCase(item.name) + '\n';
+        }
+        ret += item.description || (subject.nameFor(item, capitalize(item.theyre), "You're") + ' just ' +
+          subject.nameFor(item, item.indefiniteName) + '.');
+        subject.setKnown(item);
+        // describe exits with directions
+        var exits = item.getExits().filter(function(ex) {
+          return ex.direction;
+        });
+        if (exits.length > 0) {
+          var exitTypes = {};
+          exits.forEach(function(ex) {
+            var type = ex.pluralName;
+            if (!(type in exitTypes)) {
+              exitTypes[type] = {
+                single: ex.indefiniteName,
+                multiple: ex.pluralName,
+                directions: []
+              };
+            }
+            exitTypes[type].directions.push(directionName(ex.direction));
+          });
+          Object.keys(exitTypes).forEach(function(type) {
+            if (subject.location === item) {
+              ret += ' There ';
+              ret += exitTypes[type].directions.length == 1 ? 'is ' + exitTypes[type].single : 'are ' +
+                exitTypes[type].multiple;
+            } else {
+              ret += ' ' + capitalize(item.they) + ' ' + item.have;
+              ret += exitTypes[type].directions.length == 1 ? exitTypes[type].single : exitTypes[type].multiple;
+            }
+            ret += ' leading ';
+            ret += series(exitTypes[type].directions);
+            ret += '.';
+          });
+        }
+        // describe non-exits or exits with no direction, but not the subject
+        var items = item.listContents(subject).filter(function(it) {
+          return (!(it instanceof Exit) || (!it.direction)) && it !== subject;
+        });
+        var itemNames = items.map(function(it) {
+          return subject.nameFor(it, it.indefiniteName, 'you');
+        });
+        if (items.length > 0) {
+          if (subject.location === item) {
+            ret += ' ' + capitalize(series(itemNames)) + ' ' + ((items.length > 1) ? 'are' : items[0].are) +
+              ' here.';
+          } else {
+            ret += ' ' + subject.nameFor(item, capitalize(item.pronoun), 'You') + ' ' + ((item.alive) ?
+                subject.nameFor(item, item.have, 'have') : item.verb('contain')) +
+              ' ' + series(itemNames) + '.';
+          }
+        }
+        tell(subject, ret);
+      };;
+      Item.prototype.allContents = function() {
+        var here = this;
+        return allItems().filter(function(it) {
+          return it.location === here;
+        });
+      };;
+      Item.prototype.listContents = function(subject) {
+        var here = this;
+        var items = allItems().filter(function(it) {
+          return it.location === here && !it.hidden;
+        });
+        items.forEach(function(i) {
+          subject.setKnown(i);
+        });
+        items = items.filter(function(it) {
+          return !(it.unlisted);
+        });
+        return items;
+      };;
+      Item.prototype.ultimatelyContains = function(item, excludingItself) {
+        var cnt = 0;
+        for (var loc = (excludingItself ? item.location : item); loc; loc = loc.location) {
+          cnt++;
+          if (cnt > a.maxNesting) {
+            throw new Error('Location nesting of more than ' + a.maxNesting + ' exceeded!');
+          }
+          if (loc === this)
+            return true;
+        }
+        return false;
+      };;
+      Item.prototype.locationChain = function() {
+        var ids = {};
+        var ret = [];
+        for (var loc = this; loc && loc.id && (!(loc.id in ids)); loc = loc.location) {
+          ids[loc.id] = true;
+          ret.push(loc);
+        }
+        return ret;
+      };;
+      // return true if yes, false if no
+      Item.prototype.beAskedToGive = function(item, asker, doTell) {
+        var holder = this;
+        if (doTell)
+          tell(asker, "You have taken " + asker.nameFor(item) + " from " + asker.nameFor(this) +
+            ".",
+            function(witness) {
+              return capitalize(witness.nameFor(asker)) + ' ' + asker.have + ' taken ' + witness.nameFor(item) +
+                ' from ' +
+                witness.nameFor(holder) + '.';
+            });
+        return true;
+      };;
+      Item.prototype.beAskedToTake = function(item, asker, doTell) {
+        if (doTell)
+          tell(asker, "You can't " + (this.alive ? 'give ' : 'put ') + asker.nameFor(item) + (this.alive ?
+            ' to ' : ' into ') + asker.nameFor(this) + ".");
+        return false;
+      };;
+      Item.prototype.ultimateLocation = function() {
+        var cnt = 0;
+        for (var loc = this; loc.location; loc = loc.location) {
+          cnt++;
+          if (cnt > a.maxNesting) {
+            throw new Error('Location nesting of more than ' + a.maxNesting + ' exceeded!');
+          }
+        }
+        return loc;
+      };;
+      Item.prototype.canSee = function(item) {
+        return !item.hidden && (this.ultimateLocation() === item.ultimateLocation());
+      };;
+      Item.prototype.has = function(item) {
+        return !item.hidden && item.location === this; //(this.ultimatelyContains(item));
+      };;
+      Item.prototype.appearsInInventoryOf = function(subject) {
+        return subject.has(this);
+      };;
+      Item.prototype.superMethod = function(name) {
+        var method = this[name];
+        var proto = Object.getPrototypeOf(this);
+        while (true) {
+          var superMethod = proto[name];
+          if (!superMethod)
+            return superMethod;
+          if (superMethod !== method)
+            return superMethod.bind(this);
+          proto = Object.getPrototypeOf(proto);
+          if (!proto)
+            return void(0);
+        }
+      };;
+      Item.prototype.serialize = function() {
+        var item = this;
+        var ret = JSON.stringify(this, function(k, v) {
+          if ((typeof this.getImmutableProperties === 'function') && (k in this.getImmutableProperties()))
+            return; // don't serialize immutables
+          if (v === a)
+            return; // don't serialize the adventure object
+          if (k && v && (v.adventure === a)) {
+            return serializationPrefix + '#' + v.id;
+          }
+          if (typeof v === 'string' && v.startsWith(serializationPrefix)) {
+            return serializationPrefix + '?' + v;
+          }
+          return v;
+        });
+        if (ret !== '{}')
+          return ret;
+        return false;
+      };;
+      // restore this item to the state represented by the passed-in string  
+      Item.prototype.deserialize = function(state) {
+        var stateObject = JSON.parse(state, function(k, v) {
+          if ((typeof v === 'string') && (v.startsWith(serializationPrefix))) {
+            var c = v.charAt(serializationPrefix.length);
+            var s = v.substring(serializationPrefix.length + 1);
+            if (c == '#') {
+              return itemMap[s];
+            } else {
+              return s;
+            }
+          }
+          return v;
+        });
+        var item = this;
+        Object.keys(stateObject).forEach(function(k) {
+          if (!(k in item.getImmutableProperties())) {
+            item[k] = stateObject[k];
+          }
+        });
+      };;
+      Item.prototype.newBackgroundItem = function(options) {
+        options = options || {};
+        if (!('unlisted' in options))
+          options.unlisted = immutable(true);
+        if (!('hidden' in options))
+          options.hidden = immutable(false);
+        if (!('canBeTaken' in options))
+          options.canBeTaken = immutable(false);
+        if (!('location' in options))
+          options.location = immutable(this);
+        return new Item(options);
+      };;
+      return Item;
+    }());
     a.newItem = function(options) {
       return new Item(options);
     };
