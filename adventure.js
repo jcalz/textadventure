@@ -1,4 +1,25 @@
 "use strict";
+var __extends = (this && this.__extends) || (function() {
+  var extendStatics = Object.setPrototypeOf ||
+    ({
+        __proto__: []
+      }
+      instanceof Array && function(d, b) {
+        d.__proto__ = b;
+      }) ||
+    function(d, b) {
+      for (var p in b)
+        if (b.hasOwnProperty(p)) d[p] = b[p];
+    };
+  return function(d, b) {
+    extendStatics(d, b);
+
+    function __() {
+      this.constructor = d;
+    }
+    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+  };
+})();
 var Adventure;
 (function(A) {
   function newAdventure() {
@@ -151,8 +172,6 @@ var Adventure;
     a.maxNesting = 256;
     // KEEP A MAP OF ALL DIRECTIONS IN THE ADVENTURE
     var directions = {};
-    //var oppositeDirections = {};
-    //var dirRegExps = {};
     a.directions = directions;
     var directionName = function(dir) {
       if (dir in directions)
@@ -264,10 +283,11 @@ var Adventure;
     a.getItem = function(id) {
       return itemMap[id];
     };
+    var isPerson = function(item) {
+      return item instanceof Person;
+    };
     var allPeople = function() {
-      return allItems().filter(function(item) {
-        return item instanceof Person;
-      });
+      return allItems().filter(isPerson);
     };
     a.allPeople = allPeople;
     // KEEP A LIST OF ALL COMMANDS IN THE ADVENTURE
@@ -935,197 +955,210 @@ var Adventure;
       };
     };
     a.addItemMethod = addMethodFactory('Item', Item);
+    var Place = (function(_super) {
+      __extends(Place, _super);
 
-    function Place(options) {
-      if (typeof options === 'string') {
-        options = {
-          id: options
-        };
+      function Place(options) {
+        var _this = this;
+        if (typeof options === 'string') {
+          options = {
+            id: options
+          };
+        }
+        options = Object.assign({}, options || {});
+        var name = unwrap(options.name) || unwrap(options.id) || 'place';
+        options.name = immutable(options.name || name);
+        if (!('canBeTaken' in options)) {
+          options.canBeTaken = immutable(false);
+        }
+        if (!('hidden' in options)) {
+          options.hidden = immutable(false);
+        }
+        options.location = immutable(options.location);
+        options.isPlace = immutable(true);
+        _this = _super.call(this, options) || this;
+        return _this;
       }
-      options = Object.assign({}, options || {});
-      var name = unwrap(options.name) || unwrap(options.id) || 'place';
-      options.name = immutable(options.name || name);
-      if (!('canBeTaken' in options)) {
-        options.canBeTaken = immutable(false);
-      }
-      if (!('hidden' in options)) {
-        options.hidden = immutable(false);
-      }
-      options.location = immutable(options.location);
-      options.isPlace = immutable(true);
-      Item.call(this, options);
-    }
-    Place.prototype = Object.create(Item.prototype);
+      Place.prototype.beAskedToGive = function(item, asker, doTell) {
+        if (doTell)
+          tell(asker, "You have picked up " + asker.nameFor(item) + ".", function(witness) {
+            return capitalize(witness.nameFor(asker)) + ' ' + asker.have + ' picked up ' + witness.nameFor(
+                item) +
+              '.';
+          });
+        return true;
+      };;
+      Place.prototype.beAskedToTake = function(item, asker, doTell) {
+        if (doTell)
+          tell(asker, "You have dropped " + asker.nameFor(item) + ".", function(witness) {
+            return capitalize(witness.nameFor(asker)) + ' ' + asker.have + ' dropped ' + witness.nameFor(item) +
+              '.';
+          });
+        return true;
+      };;
+      return Place;
+    }(Item));
     a.newPlace = function(options) {
       return new Place(options);
     };
     a.addPlaceMethod = addMethodFactory('Place', Place);
-    // return true if yes, false if no
-    Place.prototype.beAskedToGive = function(item, asker, doTell) {
-      if (doTell)
-        tell(asker, "You have picked up " + asker.nameFor(item) + ".", function(witness) {
-          return capitalize(witness.nameFor(asker)) + ' ' + asker.have + ' picked up ' + witness.nameFor(item) +
-            '.';
-        });
-      return true;
-    };
-    Place.prototype.beAskedToTake = function(item, asker, doTell) {
-      if (doTell)
-        tell(asker, "You have dropped " + asker.nameFor(item) + ".", function(witness) {
-          return capitalize(witness.nameFor(asker)) + ' ' + asker.have + ' dropped ' + witness.nameFor(item) +
-            '.';
-        });
-      return true;
-    };
+    var Person = (function(_super) {
+      __extends(Person, _super);
 
-    function Person(options) {
-      if (typeof options === 'string') {
-        options = {
-          id: options
-        };
-      }
-      options = Object.assign({}, options || {});
-      var name = unwrap(options.name) || unwrap(options.id) || 'person';
-      options.name = immutable(options.name || name);
-      if (!('indefiniteName' in options)) {
-        options.indefiniteName = immutable(options.name);
-      }
-      if (!('definiteName' in options)) {
-        options.definiteName = immutable(options.name);
-      }
-      if (!('canBeTaken' in options)) {
-        options.canBeTaken = immutable(false);
-      }
-      options.location = mutable(options.location); // people default to mobile
-      if (!('pronoun' in options)) {
-        options.pronoun = immutable('she');
-      }
-      options.isPerson = immutable(true);
-      options.knownItems = [this];
-      options.playableCharacter = immutable(('playableCharacter' in options) ? options.playableCharacter : true);
-      options.alive = immutable(('alive' in options) ? options.alive : true);
-      Item.call(this, options, true);
-      // make some changes here
-      var person = this;
-      ['name', 'definiteName', 'indefiniteName', 'pronoun'].forEach(function(prop) {
-        var p = person[prop];
-        Object.defineProperty(person, prop, {
-          configurable: true,
-          enumerable: true,
-          get: function() {
-            return (a.you === person) ? 'you' : p;
-          },
-          set: function(v) {
-            p = v;
-          }
-        });
-      });
-      enforceImmutables(this);
-    }
-    Person.prototype = Object.create(Item.prototype);
-    // return true if yes, false if no
-    Person.prototype.beAskedToGive = function(item, asker, doTell) {
-      if ((this.wantsToGive[item.id] || {})[asker.id]) {
-        if (doTell) {
-          tell(this, 'You have given ' + this.nameFor(item) + ' to ' + this.nameFor(asker) + '.');
-          if (this !== asker) {
-            tell(asker, asker.nameFor(this) + ' ' + this.have + ' given you ' + asker.nameFor(item) + '.');
-          }
+      function Person(options) {
+        var _this = this;
+        if (typeof options === 'string') {
+          options = {
+            id: options
+          };
         }
-        return true;
-      }
-      if (doTell) {
-        tell(asker, capitalize(asker.nameFor(this, this.definiteName, "You")) + " won't let you take " + asker.nameFor(
-            item) +
-          ".");
-        if (this !== asker)
-          tell(this, function(askee) {
-            return capitalize(askee.nameFor(asker)) + ' ' + asker.verb('try') + ' to take ' + askee.nameFor(item) +
-              ' from you, but you don\'t let ' + asker.them + '.';
+        options = Object.assign({}, options || {});
+        var name = unwrap(options.name) || unwrap(options.id) || 'person';
+        options.name = immutable(options.name || name);
+        if (!('indefiniteName' in options)) {
+          options.indefiniteName = immutable(options.name);
+        }
+        if (!('definiteName' in options)) {
+          options.definiteName = immutable(options.name);
+        }
+        if (!('canBeTaken' in options)) {
+          options.canBeTaken = immutable(false);
+        }
+        options.location = mutable(options.location); // people default to mobile
+        if (!('pronoun' in options)) {
+          options.pronoun = immutable('she');
+        }
+        options.isPerson = immutable(true);
+        options.knownItems = [];
+        options.playableCharacter = immutable(('playableCharacter' in options) ? options.playableCharacter : true);
+        options.alive = immutable(('alive' in options) ? options.alive : true);
+        _this = _super.call(this, options, true) || this;
+        _this.knownItems.push(_this); // you know yourself
+        var person = _this;
+        ['name', 'definiteName', 'indefiniteName', 'pronoun'].forEach(function(prop) {
+          var p = person[prop];
+          Object.defineProperty(person, prop, {
+            configurable: true,
+            enumerable: true,
+            get: function() {
+              return (a.you === person) ? 'you' : p;
+            },
+            set: function(v) {
+              p = v;
+            }
           });
+        });
+        enforceImmutables(_this);
+        return _this;
       }
-      return false;
-    };
-    Person.prototype.beAskedToTake = function(item, asker, doTell) {
-      if (this.wantsToTake[item.id]) {
+      // return true if yes, false if no
+      Person.prototype.beAskedToGive = function(item, asker, doTell) {
+        if ((this.wantsToGive[item.id] || {})[asker.id]) {
+          if (doTell) {
+            tell(this, 'You have given ' + this.nameFor(item) + ' to ' + this.nameFor(asker) + '.');
+            if (this !== asker) {
+              tell(asker, asker.nameFor(this) + ' ' + this.have + ' given you ' + asker.nameFor(item) + '.');
+            }
+          }
+          return true;
+        }
         if (doTell) {
-          tell(asker, 'You have given ' + asker.nameFor(item) + ' to ' + asker.nameFor(this) + '.');
+          tell(asker, capitalize(asker.nameFor(this, this.definiteName, "You")) + " won't let you take " +
+            asker.nameFor(item) +
+            ".");
+          if (this !== asker)
+            tell(this, function(askee) {
+              return capitalize(askee.nameFor(asker)) + ' ' + asker.verb('try') + ' to take ' + askee.nameFor(
+                  item) +
+                ' from you, but you don\'t let ' + asker.them + '.';
+            });
+        }
+        return false;
+      };;
+      Person.prototype.beAskedToTake = function(item, asker, doTell) {
+        if (this.wantsToTake[item.id]) {
+          if (doTell) {
+            tell(asker, 'You have given ' + asker.nameFor(item) + ' to ' + asker.nameFor(this) + '.');
+            if (this !== asker) {
+              tell(this, this.nameFor(asker) + ' ' + asker.have + ' given you ' + this.nameFor(item) + '.');
+            }
+          }
+          return true;
+        }
+        if (doTell) {
+          tell(asker, capitalize(asker.nameFor(this, this.definiteName + " " + this.verb('do'), "You do") +
+            "n't want to take " +
+            ((this === item) ? asker.nameFor(item, item.themselves) : asker.nameFor(item) + ".")));
           if (this !== asker) {
-            tell(this, this.nameFor(asker) + ' ' + asker.have + ' given you ' + this.nameFor(item) + '.');
+            var askee = this;
+            tell(this, function() {
+              return capitalize(askee.nameFor(asker)) + ' ' + asker.verb('try') + ' to give ' +
+                askee.nameFor(item) + ' to you, but you don\'t take ' + item.them + '.';
+            });
           }
         }
-        return true;
-      }
-      if (doTell) {
-        tell(asker, capitalize(asker.nameFor(this, this.definiteName + " " + this.verb('do'), "You do") +
-          "n't want to take " +
-          ((this === item) ? asker.nameFor(item, item.themselves) : asker.nameFor(item) + ".")));
-        if (this !== asker) {
-          var askee = this;
-          tell(this, function() {
-            return capitalize(askee.nameFor(asker)) + ' ' + asker.verb('try') + ' to give ' +
-              askee.nameFor(item) + ' to you, but you don\'t take ' + item.them + '.';
+        return false;
+      };;
+      Person.prototype.setKnown = function(object, value) {
+        if (Array.isArray(object)) {
+          var person = this;
+          object.forEach(function(object) {
+            person.setKnown(object, value);
           });
         }
-      }
-      return false;
-    };
-    Person.prototype.setKnown = function(object, value) {
-      if (Array.isArray(object)) {
-        var person = this;
-        object.forEach(function(object) {
-          person.setKnown(object, value);
+        if (typeof value === 'undefined')
+          value = true;
+        // TODO performance penalty here?
+        this.knownItems = this.knownItems.filter(function(it) {
+          return it !== object;
         });
-      }
-      if (typeof value === 'undefined')
-        value = true;
-      // TODO performance penalty here?
-      this.knownItems = this.knownItems.filter(function(it) {
-        return it !== object;
-      });
-      if (value)
-        this.knownItems.push(object);
-    };
-    Person.prototype.isKnown = function(object) {
-      return this.knownItems.indexOf(object) != -1;
-    };
-    Person.prototype.consumeInformationQueue = function() {
-      if (!this.playableCharacter)
-        return '';
-      if (!this.informationQueue)
-        return '';
-      var ret = this.informationQueue.join('\n').replace(/\n+[\b]/g, '') + '\n';
-      this.informationQueue = [];
-      return ret;
-    };
-    Person.prototype.learn = function(info) {
-      if (!this.playableCharacter)
-        return '';
-      if (!this.informationQueue)
+        if (value)
+          this.knownItems.push(object);
+      };;
+      Person.prototype.isKnown = function(object) {
+        return this.knownItems.indexOf(object) != -1;
+      };;
+      Person.prototype.consumeInformationQueue = function() {
+        if (!this.playableCharacter)
+          return '';
+        if (!this.informationQueue)
+          return '';
+        var ret = this.informationQueue.join('\n').replace(/\n+[\b]/g, '') + '\n';
         this.informationQueue = [];
-      var i;
-      if (typeof info === 'string') {
-        i = info;
-        info = function() {
-          return i;
-        };
-      }
-      try {
-        a.you = this;
-        i = info(this);
-      } finally {
-        a.you = null;
-      }
-      if (i)
-        this.informationQueue.push(i);
-    };
-    Person.prototype.nameFor = function(item, name, youName) {
-      name = name || (this.isKnown(item) ? item.definiteName : item.indefiniteName);
-      this.setKnown(item);
-      if (this !== item)
-        return name;
-      return youName || 'yourself';
-    };
+        return ret;
+      };;
+      Person.prototype.learn = function(info) {
+        if (!this.playableCharacter)
+          return '';
+        if (!this.informationQueue)
+          this.informationQueue = [];
+        var i;
+        if (typeof info === 'string') {
+          i = info;
+          info = function() {
+            return i;
+          };
+        }
+        try {
+          a.you = this;
+          i = info(this);
+        } finally {
+          a.you = null;
+        }
+        if (i)
+          this.informationQueue.push(i);
+      };;
+      Person.prototype.nameFor = function(item, name, youName) {
+        name = name || (this.isKnown(item) ? item.definiteName : item.indefiniteName);
+        this.setKnown(item);
+        if (this !== item)
+          return name;
+        return youName || 'yourself';
+      };
+      Person.prototype.use = function(item) {};;
+      Person.prototype.go = function(exit) {};;
+      return Person;
+    }(Item));
     a.newPerson = function(options) {
       return new Person(options);
     };
@@ -1322,217 +1355,225 @@ var Adventure;
         objectMethodName: "beUsedBy"
       }
     });
+    var Exit = (function(_super) {
+      __extends(Exit, _super);
 
-    function Exit(options) {
-      if (typeof options === 'string') {
-        options = {
-          id: options
-        };
-      }
-      options = Object.assign({}, options || {});
-      var name = unwrap(options.name) || unwrap(options.id) || 'exit';
-      options.name = immutable(options.name || name);
-      if (!('canBeTaken' in options)) {
-        options.canBeTaken = immutable(false);
-      }
-      if (!('hidden' in options)) {
-        options.hidden = immutable(false);
-      }
-      options.location = immutable(options.location);
-      options.direction = immutable(options.direction);
-      options.isExit = immutable(true);
-      // destination should be managed as a getter/setter that takes objects or ids, like location
-      var destinationMarked = immutable(options.destination);
-      delete options.destination;
-      var destinationIsImmutable = !(destinationMarked.mutable);
-      var destination = unwrap(destinationMarked);
-      var o = {
-        configurable: false,
-        enumerable: true,
-        get: function() {
-          var ret = destination;
-          if (typeof destination === 'string')
-            ret = itemMap[destination];
-          if (!ret)
-            ret = null;
-          return ret;
-        }
-      };
-      if (!destinationIsImmutable) {
-        o['set'] = function(l) {
-          destination = l;
-        };
-      }
-      Object.defineProperty(this, 'destination', o);
-      var reverse = unwrap(options.reverse);
-      if (reverse !== false) {
-        delete options.reverse;
-        if (!reverse) {
-          reverse = {};
-        } else if (typeof reverse == 'string') {
-          reverse = {
-            direction: reverse
+      function Exit(options) {
+        var _this = this;
+        if (typeof options === 'string') {
+          options = {
+            id: options
           };
         }
-        reverse.direction = immutable(reverse.direction || (directions[unwrap(options.direction)] || {}).oppositeId);
-        if (('id' in reverse) && (unwrap(reverse.id) in itemMap))
-          throw new Error('Cannot reuse id ' + unwrap(reverse
-              .id) +
-            ' for reverse.id');
-        reverse.id = immutable(reverse.id || getNewId((unwrap(reverse.name) || name) + '-reverse'));
-        var reversePronoun = ('pronoun' in reverse) ? unwrap(reverse.pronoun) : (('pronoun' in options) ? unwrap(
-            options.pronoun) :
-          'it');
-        if ('name' in reverse || 'pronoun' in reverse) {
-          reverse.name = immutable(reverse.name || name);
-          var defaultNames = getDefaultNames(unwrap(reverse.name), reversePronoun);
-          reverse.keywords = immutable(reverse.keywords || defaultNames.keywords);
-          reverse.definiteName = immutable(reverse.definiteName || defaultNames.definiteName);
-          reverse.indefiniteName = immutable(reverse.indefiniteName || defaultNames.indefiniteName);
-          reverse.pluralName = immutable(reverse.pluralName || defaultNames.pluralName);
-          reverse.pronoun = immutable(reversePronoun);
+        options = Object.assign({}, options || {});
+        var name = unwrap(options.name) || unwrap(options.id) || 'exit';
+        options.name = immutable(options.name || name);
+        if (!('canBeTaken' in options)) {
+          options.canBeTaken = immutable(false);
         }
-        ['description', 'keywords', 'definiteName', 'indefiniteName', 'pluralName', 'pronoun', 'canBeTaken',
-          'hidden',
-          'unlisted'
-        ].forEach(function(k) {
-          if (k in reverse)
-            reverse[k] = immutable(reverse[k]);
-        });
-        // unchangable options
-        options.isForwardExit = immutable(true);
-        options.isReverseExit = immutable(false);
-        reverse.isForwardExit = immutable(false);
-        reverse.isReverseExit = immutable(true);
-        options.forwardExit = immutable(this);
-        var reverseExit = Object.create(this);
-        options.reverseExit = immutable(reverseExit);
-        options.otherWay = immutable(reverseExit);
-        reverse.otherWay = immutable(this);
-        if ('location' in reverse)
-          throw new Error(
-            'Do not specify location of reverse exit; it will automatically be the same as the exit destination');
-        if ('destination' in reverse)
-          throw new Error(
-            'Do not specify destination of reverse exit; it will automatically be the same as the exit location');
-        var immutableProperties = {};
-        reverse.getImmutableProperties = function() {
-          return immutableProperties;
-        };
-        setOptions(reverse, reverse);
-        enforceImmutables(reverse);
-        // as of now, reverse is an object holding onto these properties
-      }
-      Item.call(this, options);
-      if (destinationIsImmutable)
-        this.getImmutableProperties().destination = true;
-      if (reverse) {
-        itemMap[reverse.id] = reverseExit;
-        var forwardExit = this;
-        reverse.serialize = this.serialize.bind(reverse);
-        reverse.deserialize = this.deserialize.bind(reverse);
-        reverse.getImmutableProperties = function() {
-          return immutableProperties;
-        };
-        Object.defineProperty(reverseExit, 'location', {
-          enumerable: true,
+        if (!('hidden' in options)) {
+          options.hidden = immutable(false);
+        }
+        options.location = immutable(options.location);
+        options.direction = immutable(options.direction);
+        options.isExit = immutable(true);
+        // destination should be managed as a getter/setter that takes objects or ids, like location
+        var destinationMarked = immutable(options.destination);
+        delete options.destination;
+        var destinationIsImmutable = !(destinationMarked.mutable);
+        var destination = unwrap(destinationMarked);
+        var reverse = unwrap(options.reverse);
+        if (reverse !== false) {
+          delete options.reverse;
+          if (!reverse) {
+            reverse = {};
+          } else if (typeof reverse == 'string') {
+            reverse = {
+              direction: reverse
+            };
+          }
+          reverse.direction = immutable(reverse.direction || (directions[unwrap(options.direction)] || {}).oppositeId);
+          if (('id' in reverse) && (unwrap(reverse.id) in itemMap))
+            throw new Error('Cannot reuse id ' + unwrap(reverse
+                .id) +
+              ' for reverse.id');
+          reverse.id = immutable(reverse.id || getNewId((unwrap(reverse.name) || name) + '-reverse'));
+          var reversePronoun = ('pronoun' in reverse) ? unwrap(reverse.pronoun) : (('pronoun' in options) ?
+            unwrap(options.pronoun) :
+            'it');
+          if ('name' in reverse || 'pronoun' in reverse) {
+            reverse.name = immutable(reverse.name || name);
+            var defaultNames = getDefaultNames(unwrap(reverse.name), reversePronoun);
+            reverse.keywords = immutable(reverse.keywords || defaultNames.keywords);
+            reverse.definiteName = immutable(reverse.definiteName || defaultNames.definiteName);
+            reverse.indefiniteName = immutable(reverse.indefiniteName || defaultNames.indefiniteName);
+            reverse.pluralName = immutable(reverse.pluralName || defaultNames.pluralName);
+            reverse.pronoun = immutable(reversePronoun);
+          }
+          ['description', 'keywords', 'definiteName', 'indefiniteName', 'pluralName', 'pronoun', 'canBeTaken',
+            'hidden',
+            'unlisted'
+          ].forEach(function(k) {
+            if (k in reverse)
+              reverse[k] = immutable(reverse[k]);
+          });
+          // unchangable options
+          options.isForwardExit = immutable(true);
+          options.isReverseExit = immutable(false);
+          reverse.isForwardExit = immutable(false);
+          reverse.isReverseExit = immutable(true);
+          if ('location' in reverse)
+            throw new Error(
+              'Do not specify location of reverse exit; it will automatically be the same as the exit destination'
+            );
+          if ('destination' in reverse)
+            throw new Error(
+              'Do not specify destination of reverse exit; it will automatically be the same as the exit location'
+            );
+          var immutableProperties = {};
+          reverse.getImmutableProperties = function() {
+            return immutableProperties;
+          };
+          setOptions(reverse, reverse);
+          enforceImmutables(reverse);
+          // as of now, reverse is an object holding onto these properties
+        }
+        _this = _super.call(this, options, false) || this;
+        var o = {
           configurable: false,
-          get: function() {
-            return forwardExit.destination;
-          },
-          set: function(v) {
-            forwardExit.destination = v;
-          }
-        });
-        Object.defineProperty(reverseExit, 'destination', {
           enumerable: true,
-          configurable: false,
           get: function() {
-            return forwardExit.location;
-          },
-          set: function(v) {
-            forwardExit.location = v;
+            var ret = destination;
+            if (typeof destination === 'string')
+              ret = itemMap[destination];
+            if (!ret)
+              ret = null;
+            return ret;
           }
-        });
-        var mergedKeyObj = {};
-        Object.keys(this).forEach(function(k) {
-          mergedKeyObj[k] = true;
-        });
-        Object.keys(reverse).forEach(function(k) {
-          mergedKeyObj[k] = true;
-        });
-        Object.keys(mergedKeyObj).forEach(function(k) {
-          if ((k == 'location') || (k == 'destination'))
-            return;
-          var get;
-          var set;
-          if (k in reverse) {
-            get = function() {
-              return reverse[k];
-            };
-            set = function(v) {
-              reverse[k] = v;
-            };
-          } else {
-            get = function() {
-              return forwardExit[k];
-            };
-            set = function(v) {
-              forwardExit[k] = v;
-            };
-          }
-          Object.defineProperty(reverseExit, k, {
+        };
+        if (!destinationIsImmutable) {
+          o['set'] = function(l) {
+            destination = l;
+          };
+        }
+        Object.defineProperty(_this, 'destination', o);
+        if (destinationIsImmutable)
+          _this.getImmutableProperties().destination = true;
+        if (reverse) {
+          _this.forwardExit = _this;
+          var reverseExit = Object.create(_this);
+          _this.reverseExit = reverseExit;
+          _this.otherWay = reverseExit;
+          reverseExit.otherWay = _this;
+          itemMap[reverse.id] = reverseExit;
+          var forwardExit = _this;
+          reverse.serialize = _this.serialize.bind(reverse);
+          reverse.deserialize = _this.deserialize.bind(reverse);
+          reverse.getImmutableProperties = function() {
+            return immutableProperties;
+          };
+          Object.defineProperty(reverseExit, 'location', {
             enumerable: true,
             configurable: false,
-            get: get,
-            set: set
+            get: function() {
+              return forwardExit.destination;
+            },
+            set: function(v) {
+              forwardExit.destination = v;
+            }
           });
+          Object.defineProperty(reverseExit, 'destination', {
+            enumerable: true,
+            configurable: false,
+            get: function() {
+              return forwardExit.location;
+            },
+            set: function(v) {
+              forwardExit.location = v;
+            }
+          });
+          var mergedKeyObj = {};
+          Object.keys(_this).forEach(function(k) {
+            mergedKeyObj[k] = true;
+          });
+          Object.keys(reverse).forEach(function(k) {
+            mergedKeyObj[k] = true;
+          });
+          Object.keys(mergedKeyObj).forEach(function(k) {
+            if ((k == 'location') || (k == 'destination'))
+              return;
+            var get;
+            var set;
+            if (k in reverse) {
+              get = function() {
+                return reverse[k];
+              };
+              set = function(v) {
+                reverse[k] = v;
+              };
+            } else {
+              get = function() {
+                return forwardExit[k];
+              };
+              set = function(v) {
+                forwardExit[k] = v;
+              };
+            }
+            Object.defineProperty(reverseExit, k, {
+              enumerable: true,
+              configurable: false,
+              get: get,
+              set: set
+            });
+          });
+          Object.seal(reverseExit);
+          enforceImmutables(_this);
+        }
+        return _this;
+      }
+      Exit.prototype.getDistinguishingName = function(indefinite) {
+        var ret = indefinite ? this.indefiniteName : this.definiteName;
+        if (!this.location)
+          return ret;
+        if (!this.direction)
+          return ret;
+        var name = this.name;
+        var exitsOfSameType = this.location.getExits().filter(function(ex) {
+          return ex.name === name;
         });
-        Object.seal(reverseExit);
-      }
-    }
-    Exit.prototype = Object.create(Item.prototype);
-    Exit.prototype.getDistinguishingName = function(indefinite) {
-      var ret = indefinite ? this.indefiniteName : this.definiteName;
-      if (!this.location)
+        if (exitsOfSameType.length < 2)
+          return ret;
+        ret += ' leading ' + directionName(this.direction);
         return ret;
-      if (!this.direction)
-        return ret;
-      var name = this.name;
-      var exitsOfSameType = this.location.getExits().filter(function(ex) {
-        return ex.name === name;
-      });
-      if (exitsOfSameType.length < 2)
-        return ret;
-      ret += ' leading ' + directionName(this.direction);
-      return ret;
-    };
-    Exit.prototype.beUsedBy = function(subject) {
-      var exitName = this.definiteName + (this.direction ? ' leading ' + directionName(this.direction) :
-        '');
-      var ret = 'You use ' + exitName + '.\n';
-      var exit = this;
-      tell(subject, ret, function(witness) {
-        return capitalize(subject.definiteName) + ' ' + subject.verb('leave') + ' ' + exit.location.definiteName +
-          ' through ' + exitName + '.';
-      });
-      subject.location = this.destination;
-      var otherWayName = this.otherWay ? ' through ' + this.otherWay.definiteName + (this.otherWay.direction ?
-        ' leading ' + directionName(this.otherWay.direction) : '') : '';
-      tell(subject, null, function(witness) {
-        return capitalize(subject.definiteName) + ' ' + subject.verb('enter') + ' ' + exit.destination.definiteName +
-          otherWayName + '.';
-      });
-      subject.look();
-    };
-    Exit.prototype.beExaminedBy = function(subject) {
-      if (this.description) {
-        tell(subject, this.description);
-        return;
-      }
-      var exitName = this.getDistinguishingName(true);
-      tell(subject, capitalize(this.theyre) + ' ' + exitName + '.');
-    };
+      };;
+      Exit.prototype.beUsedBy = function(subject) {
+        var exitName = this.definiteName + (this.direction ? ' leading ' + directionName(this.direction) :
+          '');
+        var ret = 'You use ' + exitName + '.\n';
+        var exit = this;
+        tell(subject, ret, function(witness) {
+          return capitalize(subject.definiteName) + ' ' + subject.verb('leave') + ' ' + exit.location.definiteName +
+            ' through ' + exitName + '.';
+        });
+        subject.location = this.destination;
+        var otherWayName = this.otherWay ? ' through ' + this.otherWay.definiteName + (this.otherWay.direction ?
+          ' leading ' + directionName(this.otherWay.direction) : '') : '';
+        tell(subject, null, function(witness) {
+          return capitalize(subject.definiteName) + ' ' + subject.verb('enter') + ' ' + exit.destination.definiteName +
+            otherWayName + '.';
+        });
+        subject.look();
+      };;
+      Exit.prototype.beExaminedBy = function(subject) {
+        if (this.description) {
+          tell(subject, this.description);
+          return;
+        }
+        var exitName = this.getDistinguishingName(true);
+        tell(subject, capitalize(this.theyre) + ' ' + exitName + '.');
+      };;
+      return Exit;
+    }(Item));
     a.newExit = function(options) {
       return new Exit(options);
     };
