@@ -307,7 +307,7 @@
     ///////////// SPECIFIC STUFF /////////////////
     var A = Adventure;
     var adventure = A.newAdventure();
-    var tell = adventure.tell;
+    var tell = adventure.tell.bind(adventure);
 
     // silly template language: 
     // "use %i1" means "use" followed by an ITEM, to be passed as FIRST parameter to the function.
