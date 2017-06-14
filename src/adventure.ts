@@ -1,3 +1,5 @@
+var x: Readonly<string>;
+
 interface Array<T> {
   filter<U extends T>(pred: (a: T) => a is U): U[];
 }
@@ -210,7 +212,7 @@ namespace Adventure {
     };
   };
 
-  class Adventure {
+  export class Adventure {
 
 
     you: Person;
@@ -347,138 +349,21 @@ namespace Adventure {
       });
 
       var directionName = this.directionName.bind(this);
-      a.newCommand({
-        methodName: "go",
-        templates: 'go|move|walk| %d1',
-        help: 'Go in the specified direction, like North or South.',
-        command: function(exit) {
-          if (exit.noExit) {
-            tell(this, "You can't go " + directionName(exit.direction) + " from here.");
-            return;
-          }
-          this.use(exit);
+
+      // newCommands
+
+      for (var commandName in Person) {
+        if (commandName.startsWith('newCommand')) {
+          a.newCommand(Person[commandName]);
         }
-      });
+      }
 
 
-      a.newCommand({
-        methodName: "climb",
-        templates: 'climb |%d1',
-        command: function(dir: Exit) {
-          if (!dir) {
-            var dir = this.location.getExits().find(function(ex: Exit) {
-              return ex.direction == 'up';
-            }) || noExit['up']
-          }
-          this.go(dir);
-        }
-      });
-
-      a.newCommand({
-        methodName: "look",
-        templates: 'look|l',
-        help: 'Look around you.',
-        command: function look() {
-          this.setKnown(this.location);
-          this.location.beExaminedBy(this);
-        }
-      });
-          // how do I represent arbitrary commands?!
-      
-
-
-      a.newCommand({
-        methodName: "take",
-        templates: ["take|t|get|pickup %i1", "pick up %i1", "pick %i1 up"],
-        help: "Pick up an item.",
-        command: {
-          objectMethodName: "beTakenBy"
-        }
-      });
-
-      a.newCommand({
-        methodName: "drop",
-        templates: ["drop|d|release %i1", "put down %i1", "put %i1 down", "let %i1 go", "let go |of| %i1"],
-        help: "Put down an item.",
-        command: {
-          objectMethodName: "beDroppedBy",
-          mustHave: true
-        }
-      });
-
-      a.newCommand({
-        methodName: "give",
-        templates: ["give %i1 to %i2", "give %i2 %i1"],
-        help: "Give an item to someone else.",
-        command: {
-          objectMethodName: "beGivenBy",
-          mustHave: true
-        }
-      });
 
       var allItems: (() => Item[]) = this.allItems.bind(this);
       var tell = this.tell;
 
       var commands = this.commands;
-      a.newCommand({
-        methodName: "inventory",
-        templates: 'inventory|i',
-        help: 'List the items in your possession.',
-        command: function inventory() {
-          var subject = this;
-          var items = allItems().filter(function(item) {
-            return item.appearsInInventoryOf(subject);
-          }).map(function(i) {
-            subject.setKnown(i);
-            return i.indefiniteName;
-          });
-          var ret = (!items.length) ? "You don't have anything." : "You have " + series(items) + ".";
-          tell(this, ret);
-        }
-      });
-
-      a.newCommand({
-        methodName: "help",
-        command: function help() {
-          var ret = '';
-          ret += 'Need help?  Here are some commands:\n\n';
-          ret += commands.filter(function(c) {
-            return c.help;
-          }).map(function(c) {
-            var shortcut = c.templates.find(function(t) {
-              return t.split(/\s+/)[0].length == 1;
-            });
-            return '"' + c.templates[0].toLowerCase().split(/\s+/).map(function(x) {
-              return x.startsWith('%i') ? '[ITEM]' : x.startsWith('%d') ? '[DIRECTION]' : capitalize(x);
-            }).join(' ') + '": ' + c.help + (shortcut ? ' (Shortcut: "' + shortcut.charAt(0).toUpperCase() +
-              '")' :
-              '');
-          }).join('\n');
-          ret += '\n\nThere are other commands not listed here.  Try stuff out.  Good luck!';
-          tell(this, ret);
-        },
-        templates: ['help|h', 'help me'],
-        help: 'Read these words.'
-      });
-
-      a.newCommand({
-        methodName: "examine",
-        templates: ["examine|x %i1", "look|l |at|in|inside|into %i1"],
-        help: "Examine an item.",
-        command: {
-          objectMethodName: "beExaminedBy"
-        }
-      });
-
-      a.newCommand({
-        methodName: "use",
-        templates: ["use|u %i1", "use|u %i1 with|on %i2"],
-        help: "Use an item in some way.",
-        command: {
-          objectMethodName: "beUsedBy"
-        }
-      });
-
       var noExit = this.noExit;
       Object.keys(this.directions).forEach(function(k) {
         noExit[k] = new Exit(a, {
@@ -639,7 +524,9 @@ namespace Adventure {
     };
     addPersonMethod = addMethodFactory('Person', Person);
 
-    newExit<T>(options: MaybePropertiesMarked<Partial<Exit>>, extraOptions?: MaybePropertiesMarked<T>): Exit & T {
+    newExit<T>(options: MaybePropertiesMarked<Partial<Exit &
+      { reverse: string | false | MaybePropertiesMarked<Partial<Exit>> }>>,
+      extraOptions?: MaybePropertiesMarked<T>): Exit & T {
       return new Exit(this, Object.assign({}, options, extraOptions)) as Exit & T;
     };
     addExitMethod = addMethodFactory('Exit', Exit);
@@ -860,7 +747,7 @@ namespace Adventure {
     };
   }
 
-  class Item {
+  export class Item {
     getImmutableProperties: () => SetOfStrings;
     location: Item;
     definiteName: string;
@@ -1300,6 +1187,8 @@ namespace Adventure {
       this.adventure.tell(subject, ret);
     };
 
+    public beUsedBy?(person: Person, instrument?: Item):void;
+
     allContents() {
       var here = this;
       return this.adventure.allItems().filter(function(it) {
@@ -1457,7 +1346,7 @@ namespace Adventure {
   }
 
 
-  class Place extends Item {
+  export class Place extends Item {
 
     constructor(adventure: Adventure, options: Partial<MaybePropertiesMarked<Place>>) {
       if (typeof options === 'string') {
@@ -1508,11 +1397,10 @@ namespace Adventure {
     return item instanceof Person;
   }
 
-  class Person extends Item {
+  export class Person extends Item {
 
-    
+
     knownItems: Item[];
-    look: ()=>void; 
 
     constructor(adventure: Adventure, options: Partial<MaybePropertiesMarked<Person>>) {
       if (typeof options === 'string') {
@@ -1679,8 +1567,140 @@ namespace Adventure {
       return youName || 'yourself';
     }
 
-    use(item: Item) { };
-    go(exit: Exit) { };
+    private static newCommandGo: CommandOptions = {
+      methodName: "go",
+      templates: 'go|move|walk| %d1',
+      help: 'Go in the specified direction, like North or South.',
+      command: function(exit) {
+        if (exit.noExit) {
+          tell(this, "You can't go " + this.adventure.directionName(exit.direction) + " from here.");
+          return;
+        }
+        this.use(exit);
+      }
+    };
+    go(exit: Exit) { }
+
+    private static newCommandClimb: CommandOptions = {
+      methodName: "climb",
+      templates: 'climb |%d1',
+      command: function(dir: Exit) {
+        if (!dir) {
+          var dir = this.location.getExits().find(function(ex: Exit) {
+            return ex.direction == 'up';
+          }) || this.adventure.noExit['up']
+        }
+        this.go(dir);
+      }
+    };
+    climb(exit?: Exit) { }
+
+    private static newCommandLook: CommandOptions = {
+      methodName: "look",
+      templates: 'look|l',
+      help: 'Look around you.',
+      command: function look() {
+        this.setKnown(this.location);
+        this.location.beExaminedBy(this);
+      }
+    };
+    look() { }
+
+    private static newCommandTake: CommandOptions = {
+      methodName: "take",
+      templates: ["take|t|get|pickup %i1", "pick up %i1", "pick %i1 up"],
+      help: "Pick up an item.",
+      command: {
+        objectMethodName: "beTakenBy"
+      }
+    };
+    take(item: Item) { }
+
+    private static newCommandDrop: CommandOptions = {
+      methodName: "drop",
+      templates: ["drop|d|release %i1", "put down %i1", "put %i1 down", "let %i1 go", "let go |of| %i1"],
+      help: "Put down an item.",
+      command: {
+        objectMethodName: "beDroppedBy",
+        mustHave: true
+      }
+    };
+    drop(item: Item) { }
+
+    private static newCommandGive: CommandOptions = {
+      methodName: "give",
+      templates: ["give %i1 to %i2", "give %i2 %i1"],
+      help: "Give an item to someone else.",
+      command: {
+        objectMethodName: "beGivenBy",
+        mustHave: true
+      }
+    };
+    give(item: Item, recipient: Item) { }
+
+    private static newCommandInventory: CommandOptions = {
+      methodName: "inventory",
+      templates: 'inventory|i',
+      help: 'List the items in your possession.',
+      command: function inventory() {
+        var subject = this;
+        var items = this.adventure.allItems().filter(function(item) {
+          return item.appearsInInventoryOf(subject);
+        }).map(function(i) {
+          subject.setKnown(i);
+          return i.indefiniteName;
+        });
+        var ret = (!items.length) ? "You don't have anything." : "You have " + series(items) + ".";
+        tell(this, ret);
+      }
+    };
+    inventory() { }
+
+    private static newCommandHelp: CommandOptions = {
+      methodName: "help",
+      command: function help() {
+        var ret = '';
+        ret += 'Need help?  Here are some commands:\n\n';
+        ret += this.adventure.commands.filter(function(c) {
+          return c.help;
+        }).map(function(c) {
+          var shortcut = c.templates.find(function(t) {
+            return t.split(/\s+/)[0].length == 1;
+          });
+          return '"' + c.templates[0].toLowerCase().split(/\s+/).map(function(x) {
+            return x.startsWith('%i') ? '[ITEM]' : x.startsWith('%d') ? '[DIRECTION]' : capitalize(x);
+          }).join(' ') + '": ' + c.help + (shortcut ? ' (Shortcut: "' + shortcut.charAt(0).toUpperCase() +
+            '")' :
+            '');
+        }).join('\n');
+        ret += '\n\nThere are other commands not listed here.  Try stuff out.  Good luck!';
+        tell(this, ret);
+      },
+      templates: ['help|h', 'help me'],
+      help: 'Read these words.'
+    };
+    help() { }
+
+    private static newCommandExamine: CommandOptions = {
+      methodName: "examine",
+      templates: ["examine|x %i1", "look|l |at|in|inside|into %i1"],
+      help: "Examine an item.",
+      command: {
+        objectMethodName: "beExaminedBy"
+      }
+    };
+    examine(item: Item) { }
+
+    private static newCommandUse: CommandOptions = {
+      methodName: "use",
+      templates: ["use|u %i1", "use|u %i1 with|on %i2"],
+      help: "Use an item in some way.",
+      command: {
+        objectMethodName: "beUsedBy"
+      }
+    };
+    use(item: Item) { }
+
   }
 
 
@@ -1728,7 +1748,7 @@ namespace Adventure {
 
 
 
-  class Exit extends Item {
+  export class Exit extends Item {
     direction: keyof Dictionary<Direction>;
     forwardExit: Exit;
     reverseExit?: Exit;
@@ -1847,7 +1867,7 @@ namespace Adventure {
 
       super(adventure, options, false);
 
-      var o:PropertyDescriptor = {
+      var o: PropertyDescriptor = {
         configurable: false,
         enumerable: true,
         get: function() {
@@ -1915,7 +1935,7 @@ namespace Adventure {
           mergedKeyObj[k] = true;
         });
 
-        Object.keys(mergedKeyObj).forEach(function<K extends keyof Exit>(k: K) {
+        Object.keys(mergedKeyObj).forEach(function <K extends keyof Exit>(k: K) {
           if ((k == 'location') || (k == 'destination')) return;
           var get;
           var set;
