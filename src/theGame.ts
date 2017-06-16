@@ -71,7 +71,7 @@ $('#input').keydown(function(e) {
   }
 });
 
-function output(str: string, classNames?: string) {
+function output(str: string, classNames ? : string) {
   classNames = classNames || 'output-text';
   $('#output').queue(function(next) {
     //console.log(str);
@@ -151,7 +151,7 @@ $(function() {
       });
       if (hasLocalStorage) {
         localStorage.setItem(autosaveKey, adventure.serialize());
-        localStorage.setItem(autosaveKey + '-time', Date.now());
+        localStorage.setItem(autosaveKey + '-time', Date.now().toString());
       }
       return false;
     });
@@ -225,7 +225,7 @@ namespace Adventure {
     read(item: Item): void;
   }
   export interface Item {
-    beReadBy?(subject: Person): void;
+    beReadBy ? (subject: Person) : void;
   }
 }
 
@@ -241,7 +241,7 @@ namespace Adventure {
     eat(item: Item): void;
   }
   export interface Item {
-    beEatenBy?(subject: Person): void;
+    beEatenBy ? (subject: Person) : void;
   }
 }
 
@@ -254,10 +254,10 @@ adventure.newCommand({
 });
 namespace Adventure {
   export interface Person {
-    open(item: Item, instrument?: Item): void;
+    open(item: Item, instrument ? : Item): void;
   }
   export interface Item {
-    beOpenedBy?(subject: Person, instrument?: Item): void;
+    beOpenedBy ? (subject: Person, instrument ? : Item) : void;
   }
 }
 
@@ -273,7 +273,7 @@ namespace Adventure {
     close(item: Item): void;
   }
   export interface Item {
-    beClosedBy?(subject: Person): void;
+    beClosedBy ? (subject: Person) : void;
   }
 }
 
@@ -286,10 +286,10 @@ adventure.newCommand({
 });
 namespace Adventure {
   export interface Person {
-    unlock(item: Item, instrument?: Item): void;
+    unlock(item: Item, instrument ? : Item): void;
   }
   export interface Item {
-    beUnlockedBy?(subject: Person, instrument?: Item): void;
+    beUnlockedBy ? (subject: Person, instrument ? : Item) : void;
   }
 }
 
@@ -302,10 +302,10 @@ adventure.newCommand({
 });
 namespace Adventure {
   export interface Person {
-    lock(item: Item, instrument?: Item): void;
+    lock(item: Item, instrument ? : Item): void;
   }
   export interface Item {
-    beLockedBy?(subject: Person, instrument?: Item): void;
+    beLockedBy ? (subject: Person, instrument ? : Item) : void;
   }
 }
 
@@ -321,7 +321,7 @@ namespace Adventure {
     move(item: Item): void;
   }
   export interface Item {
-    beMovedBy?(subject: Person): void;
+    beMovedBy ? (subject: Person) : void;
   }
 }
 
@@ -338,7 +338,7 @@ namespace Adventure {
     push(item: Item): void;
   }
   export interface Item {
-    bePushedBy?(subject: Person): void;
+    bePushedBy ? (subject: Person) : void;
   }
 }
 
@@ -354,7 +354,7 @@ namespace Adventure {
     pull(item: Item): void;
   }
   export interface Item {
-    bePulledBy?(subject: Person): void;
+    bePulledBy ? (subject: Person) : void;
   }
 }
 var give = adventure.getCommand('give');
@@ -367,15 +367,30 @@ adventure.newCommand({
 });
 namespace Adventure {
   export interface Person {
-    putInto(item: Item, recipient?: Item): void;
+    putInto(item: Item, recipient ? : Item): void;
   }
 }
+var started = false;
 
 var you = adventure.newPerson({
   id: 'adventurer',
   name: 'Ms. Adventurer',
   keywords: ['adventurer', 'ms adventurer'],
   pronoun: 'she'
+}, {
+  start: function() {
+    var ret = "";
+    if (started) {
+      ret += "Okay, restarting the game from the beginning...\n\n";
+      adventure.deserialize(initialState);
+    }
+    started = true;
+    ret +=
+      "You have walked into a humongous house.  As you walk into a room, the door slams shut behind you and is now gone." +
+      "  Welcome to the game.\n";
+    you.learn(ret);
+    you.look();
+  }
 });
 
 // PLACES
@@ -387,14 +402,14 @@ var room = adventure.newPlace({
 var closet = adventure.newPlace({
   id: 'closet',
   description: 'You are standing inside of a closet. It is dim in here.  There is a heavy ' +
-  'boulder up against the eastern wall.'
+    'boulder up against the eastern wall.'
 });
 
 var tunnel = adventure.newPlace({
   name: "underground tunnel",
   id: "tunnel",
   description: 'You find yourself in an underground tunnel that you can stand in and walk. ' +
-  'The walls of the tunnel are made out of stone.',
+    'The walls of the tunnel are made out of stone.',
   keywords: ["tunnel", "underground tunnel"]
 
 });
@@ -476,12 +491,11 @@ var canOpener = adventure.newItem({
 var soup = adventure.newItem({
   id: 'can of soup',
   keywords: ['can of soup', 'can', 'soup', 'soup can', 'soupcan'],
-  closed: true,
-  full: true,
   beExaminedBy: function(subject) {
     if (!subject.has(this)) {
       tell(subject,
-        "It just looks like a can of soup from here.  Maybe you can examine it more closely if you pick it up.");
+        "It just looks like a can of soup from here.  Maybe you can examine it more closely if you pick it up."
+      );
       return;
     }
     var ret = "The can is labeled \"NASS-TEE Split Pea Soup\". ";
@@ -565,7 +579,8 @@ var soup = adventure.newItem({
     if (this.full) {
       this.full = false;
       tell(subject, "You eat the soup.  Yum, tasty room-temperature soup!", function(witness) {
-        return A.capitalize(witness.nameFor(subject)) + ' ' + subject.verb('eat') + ' ' + witness.nameFor(soup) +
+        return A.capitalize(witness.nameFor(subject)) + ' ' + subject.verb('eat') + ' ' + witness.nameFor(
+            soup) +
           '.';
       });
       return;
@@ -574,59 +589,60 @@ var soup = adventure.newItem({
     return;
   },
   location: closet
+}, {
+  closed: true,
+  full: true,
 });
 
-var note = {
-  'id': 'note'
-};
-note.location = 'pit';
-note.beExaminedBy = function(subject) {
-  if (!subject.has(this)) {
-    tell(subject, "It appears to have some writing on it, but you can't read it if you don't have it.");
-    return;
-  }
-  tell(subject, "There's definitely writing on it.");
-  return;
-};
-note.beReadBy = function(subj) {
-  if (!subj.has(this)) {
-    tell(subj, "You can't read it if you don't have it.");
-    return;
-  }
-  tell(subj, "The note reads:\n\n" +
-    "\"Dear Mom,\n\nPlease do not eat the yummy NASS-TEE Split Pea Soup. I am saving it for dinner.\n" +
-    "Love,\nElla.\"");
-  return;
-};
-var note = adventure.newItem(note);
-
-var bed = {
-  id: 'bed'
-};
-bed.unlisted = true;
-bed.beExaminedBy = function(subject) {
-  var ret = 'The bed is huge with pink blankets and purple pillows.';
-  if (teddyBear.location === bed.location) {
-    teddyBear.hidden = false; // reveal the teddy bear
-    subject.setKnown(teddyBear);
-    ret += ' There is a teddy bear on the bed.';
-  }
-  tell(subject, ret);
-  return;
-};
-bed.canBeTaken = false;
-bed.beUsedBy = function(subject) {
-  tell(subject, "You lie down on the bed and fall asleep for a few minutes.  You wake up feeling refreshed.",
-    function(witness) {
-      return A.capitalize(witness.nameFor(subject)) + ' ' + subject.verb('lie') + ' down on the bed and ' +
-        subject.verb(
-          'sleep') + ' for a few minutes and then ' + subject.verb('get') + ' up.';
+var note = adventure.newItem({
+  'id': 'note',
+  location: pit,
+  beExaminedBy: function(subject) {
+    if (!subject.has(this)) {
+      tell(subject, "It appears to have some writing on it, but you can't read it if you don't have it.");
+      return;
     }
-  );
-  return;
-};
-bed.location = bedroom;
-bed = adventure.newItem(bed);
+    tell(subject, "There's definitely writing on it.");
+    return;
+  },
+  beReadBy: function(subj) {
+    if (!subj.has(this)) {
+      tell(subj, "You can't read it if you don't have it.");
+      return;
+    }
+    tell(subj, "The note reads:\n\n" +
+      "\"Dear Mom,\n\nPlease do not eat the yummy NASS-TEE Split Pea Soup. I am saving it for dinner.\n" +
+      "Love,\nElla.\"");
+    return;
+  }
+});
+
+var bed = adventure.newItem({
+  id: 'bed',
+  unlisted: true,
+  beExaminedBy: function(subject) {
+    var ret = 'The bed is huge with pink blankets and purple pillows.';
+    if (teddyBear.location === bed.location) {
+      teddyBear.hidden = false; // reveal the teddy bear
+      subject.setKnown(teddyBear);
+      ret += ' There is a teddy bear on the bed.';
+    }
+    tell(subject, ret);
+    return;
+  },
+  canBeTaken: false,
+  beUsedBy: function(subject) {
+    tell(subject, "You lie down on the bed and fall asleep for a few minutes.  You wake up feeling refreshed.",
+      function(witness) {
+        return A.capitalize(witness.nameFor(subject)) + ' ' + subject.verb('lie') + ' down on the bed and ' +
+          subject.verb(
+            'sleep') + ' for a few minutes and then ' + subject.verb('get') + ' up.';
+      }
+    );
+    return;
+  },
+  location: bedroom
+});
 
 bedroom.newBackgroundItem({
   name: 'pillows',
@@ -639,81 +655,56 @@ bedroom.newBackgroundItem({
   keywords: ['blanket', 'blankets']
 });
 
-var teddyBear = {
-  id: 'teddy bear'
-};
-teddyBear.keywords = ['teddy bear', 'teddybear', 'teddy', 'bear'];
-teddyBear.hidden = true;
-teddyBear.beExaminedBy = function(subject) {
-  if (!subject.has(teddyBear)) {
-    tell(subject,
-      'The teddy bear is brown and wearing green overalls. You can\'t tell anything else about it from here.');
-    return;
-  }
-  var ret = 'The teddy bear is brown and furry.  ' +
-    'It is wearing green corduroy overalls with a pocket in the front.';
-  if (key.location === this) {
-    ret += ' You notice a key sticking out of the pocket.';
-    subject.setKnown(key);
-  }
-  tell(subject, ret);
-  return;
-}
-teddyBear.location = bedroom;
-teddyBear = adventure.newItem(teddyBear);
-
-var key = {
-  id: 'key'
-};
-key.keywords = ['key'];
-key.beUsedBy = function(subject, object) {
-  if (!object) {
-    tell(subject, "I don't know how you want to use the key.  Try using it on something.");
-    return;
-  }
-  if (!subject.canSee(object)) {
-    tell(subject, "You can't see " + subject.nameFor(object) + ".");
-    return;
-  }
-  if (object === cabinet) {
-    if (cabinet.locked) {
-      subject.unlock(object, this);
+var teddyBear = adventure.newItem({
+  id: 'teddy bear',
+  keywords: ['teddy bear', 'teddybear', 'teddy', 'bear'],
+  hidden: true,
+  beExaminedBy: function(subject) {
+    if (!subject.has(teddyBear)) {
+      tell(subject,
+        'The teddy bear is brown and wearing green overalls. You can\'t tell anything else about it from here.'
+      );
       return;
     }
-    tell(subject, "The cabinet is already unlocked.");
-    return;
-  }
-  tell(subject, "You try to use the key on " + subject.nameFor(object) + " but it doesn't do anything.");
-  return;
-}
-key.location = teddyBear;
-key = adventure.newItem(key);
-
-var cabinet = {
-  id: 'cabinet'
-};
-cabinet.keywords = ['cabinet'];
-cabinet.closed = true;
-cabinet.locked = true;
-cabinet.canBeTaken = false;
-cabinet.beExaminedBy = function(subject) {
-  var ret = 'The cabinet is made out of wood.';
-  if (cabinet.closed) {
-    ret += ' It is closed and ' + (cabinet.locked ? '' : 'un') + 'locked.';
-  } else {
-    ret += ' It is open ';
-    var items = cabinet.listContents(subject).map(function(it) {
-      return subject.nameFor(it, it.indefiniteName, 'you');
-    });
-    if (items.length == 0) {
-      ret += 'and empty.';
-    } else {
-      ret += 'and contains ' + A.series(items) + ".";
+    var ret = 'The teddy bear is brown and furry.  ' +
+      'It is wearing green corduroy overalls with a pocket in the front.';
+    if (key.location === this) {
+      ret += ' You notice a key sticking out of the pocket.';
+      subject.setKnown(key);
     }
-  }
-  tell(subject, ret);
-};
-cabinet.beOpenedBy = cabinet.beUnlockedBy = cabinet.bePulledBy = function(subject, instrument) {
+    tell(subject, ret);
+    return;
+  },
+  location: bedroom
+});
+
+var key = key = adventure.newItem({
+  id: 'key',
+  keywords: ['key'],
+  beUsedBy: function(subject, object) {
+    if (!object) {
+      tell(subject, "I don't know how you want to use the key.  Try using it on something.");
+      return;
+    }
+    if (!subject.canSee(object)) {
+      tell(subject, "You can't see " + subject.nameFor(object) + ".");
+      return;
+    }
+    if (object === cabinet) {
+      if (cabinet.locked) {
+        subject.unlock(object, this);
+        return;
+      }
+      tell(subject, "The cabinet is already unlocked.");
+      return;
+    }
+    tell(subject, "You try to use the key on " + subject.nameFor(object) + " but it doesn't do anything.");
+    return;
+  },
+  location: teddyBear
+});
+
+var cabinetBeOpenedBy = function(subject: Adventure.Person, instrument ? : Adventure.Item) {
   if (!cabinet.closed) {
     tell(subject, "The cabinet is already open.");
     return;
@@ -751,76 +742,94 @@ cabinet.beOpenedBy = cabinet.beUnlockedBy = cabinet.bePulledBy = function(subjec
           key) + '.';
     });
   return;
-}
-cabinet.beClosedBy = function(subject) {
-  if (cabinet.closed) {
-    tell(subject, "The cabinet is already closed.");
-    return;
-  }
-  cabinet.closed = true;
-  cabinet.allContents().forEach(function(it) {
-    it.hidden = true;
-  });
-  tell(subject, "You have closed the cabinet.", function(witness) {
-    return A.capitalize(witness.nameFor(subject)) + ' ' + subject.verb('has') +
-      ' closed the cabinet.';
-  });
-  return;
 };
-cabinet.beAskedToTake = function(item, subject, doTell) {
-  if (!cabinet.closed) {
-    var info = function(witness) {
-      return A.capitalize(witness.nameFor(subject)) + ' ' + subject.verb('has') + ' put ' + witness.nameFor(
-        item) +
-        ' into the cabinet.';
-    };
-    if (doTell) tell(subject, info, info);
-    return true;
-  }
-  if (doTell) tell(subject, "You can't do that.  The cabinet is closed.");
-  return false;
-};
-cabinet.beAskedToGive = function(item, subject, doTell) {
-  if (!cabinet.closed) {
-    return cabinet.superMethod('beAskedToGive')(item, subject, doTell);
-  }
-  if (doTell) tell(subject, "You can't do that.  The cabinet is closed.");
-  return false;
-};
-cabinet.location = bedroom;
-cabinet = adventure.newItem(cabinet);
 
-var diary = {
-  id: 'diary'
-};
-diary.keywords = ['diary'];
-diary.description = 'The cover is labelled "Ella\'s Diary: PRIVATE, DO NOT READ!"';
-diary.beReadBy = function(subject) {
-  if (!subject.has(this)) {
-    tell(subject, 'You can\'t read it from here.');
+var cabinet = cabinet = adventure.newItem({
+  id: 'cabinet',
+  keywords: ['cabinet'],
+  canBeTaken: false,
+  beExaminedBy: function(subject) {
+    var ret = 'The cabinet is made out of wood.';
+    if (cabinet.closed) {
+      ret += ' It is closed and ' + (cabinet.locked ? '' : 'un') + 'locked.';
+    } else {
+      ret += ' It is open ';
+      var items = cabinet.listContents(subject).map(function(it) {
+        return subject.nameFor(it, it.indefiniteName, 'you');
+      });
+      if (items.length == 0) {
+        ret += 'and empty.';
+      } else {
+        ret += 'and contains ' + A.series(items) + ".";
+      }
+    }
+    tell(subject, ret);
+  },
+  beOpenedBy: cabinetBeOpenedBy,
+  beUnlockedBy: cabinetBeOpenedBy,
+  bePulledBy: cabinetBeOpenedBy,
+  beClosedBy: function(subject) {
+    if (cabinet.closed) {
+      tell(subject, "The cabinet is already closed.");
+      return;
+    }
+    cabinet.closed = true;
+    cabinet.allContents().forEach(function(it) {
+      it.hidden = true;
+    });
+    tell(subject, "You have closed the cabinet.", function(witness) {
+      return A.capitalize(witness.nameFor(subject)) + ' ' + subject.verb('has') +
+        ' closed the cabinet.';
+    });
     return;
-  }
-  tell(subject, "You open the diary and begin to read.  It says:\n" +
-    "  \"Dear Diary,\n" +
-    "   I'm really excited.  I'm going to my friend's house.  My friend is Emma Watson." +
-    " I don't think my friend's parents like me very much. But they seemed very excited " +
-    "when I told them I was rich.\"");
-  return;
-}
-diary.location = cabinet;
-diary.hidden = true;
-diary = adventure.newItem(diary);
+  },
+  beAskedToTake: function(item, subject, doTell) {
+    if (!cabinet.closed) {
+      var info = function(witness) {
+        return A.capitalize(witness.nameFor(subject)) + ' ' + subject.verb('has') + ' put ' + witness.nameFor(
+            item) +
+          ' into the cabinet.';
+      };
+      if (doTell) tell(subject, info, info);
+      return true;
+    }
+    if (doTell) tell(subject, "You can't do that.  The cabinet is closed.");
+    return false;
+  },
+  beAskedToGive: function(item, subject, doTell) {
+    if (!cabinet.closed) {
+      return cabinet.superMethod('beAskedToGive')(item, subject, doTell);
+    }
+    if (doTell) tell(subject, "You can't do that.  The cabinet is closed.");
+    return false;
+  },
+  location: bedroom
+}, {
+  closed: true,
+  locked: true
+});
 
-var boulder = {
-  id: 'boulder'
-}
-boulder.keywords = ['boulder', 'bolder', 'rock', 'heavy boulder'];
-boulder.unlisted = true;
-boulder.canBeTaken = false;
-boulder.budged = false;
-boulder.description = "This boulder is much too heavy for you to pick up.  " +
-  "You might be able to move it a little, but that's about it.";
-boulder.beMovedBy = function(subject) {
+var diary = adventure.newItem({
+  id: 'diary',
+  keywords: ['diary'],
+  description: 'The cover is labelled "Ella\'s Diary: PRIVATE, DO NOT READ!"',
+  beReadBy: function(subject) {
+    if (!subject.has(this)) {
+      tell(subject, 'You can\'t read it from here.');
+      return;
+    }
+    tell(subject, "You open the diary and begin to read.  It says:\n" +
+      "  \"Dear Diary,\n" +
+      "   I'm really excited.  I'm going to my friend's house.  My friend is Emma Watson." +
+      " I don't think my friend's parents like me very much. But they seemed very excited " +
+      "when I told them I was rich.\"");
+    return;
+  },
+  location: cabinet,
+  hidden: true
+});
+
+var boulderBeMovedBy = function(subject: Adventure.Person) {
   var ret = "";
   if (!boulder.budged) {
     boulder.budged = true;
@@ -842,10 +851,21 @@ boulder.beMovedBy = function(subject) {
   tell(subject, "The boulder is completely wedged in the corner now.  It's not going anywhere.");
   return;
 }
-boulder.bePushedBy = boulder.beMovedBy;
-boulder.bePulledBy = boulder.beMovedBy;
-boulder.location = closet;
-boulder = adventure.newItem(boulder);
+
+var boulder = adventure.newItem({
+  id: 'boulder',
+  keywords: ['boulder', 'bolder', 'rock', 'heavy boulder'],
+  unlisted: true,
+  canBeTaken: false,
+  description: "This boulder is much too heavy for you to pick up.  " +
+    "You might be able to move it a little, but that's about it.",
+  beMovedBy: boulderBeMovedBy,
+  bePushedBy: boulderBeMovedBy,
+  bePulledBy: boulderBeMovedBy,
+  location: closet
+}, {
+  budged: false
+});
 
 // okay let's do something
 var batman = adventure.newPerson({
@@ -858,7 +878,7 @@ var batman = adventure.newPerson({
 var cage = adventure.newItem({
   name: 'cage',
   location: batman,
-  closed: true,
+
   beExaminedBy: function(subject) {
     this.superMethod('beExaminedBy')(subject);
     tell(subject, '\b It is ' + (this.closed ? 'closed' : 'open') + '.');
@@ -885,6 +905,8 @@ var cage = adventure.newItem({
     if (doTell) tell(subject, "You can't take anything out of the cage when it is closed.");
     return false;
   }
+}, {
+  closed: true
 });
 
 // item? or person?
@@ -901,18 +923,3 @@ var collar = adventure.newItem({
 
 var initialState = adventure.serialize();
 var previouslySavedState = hasLocalStorage && localStorage.getItem(autosaveKey);
-
-var started = false;
-you.start = function() {
-  var ret = "";
-  if (started) {
-    ret += "Okay, restarting the game from the beginning...\n\n";
-    adventure.deserialize(initialState);
-  }
-  started = true;
-  ret +=
-    "You have walked into a humongous house.  As you walk into a room, the door slams shut behind you and is now gone." +
-    "  Welcome to the game.\n";
-  you.learn(ret);
-  you.look();
-};
