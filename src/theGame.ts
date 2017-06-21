@@ -1,6 +1,6 @@
 "use strict";
 
-function storageAvailable(type) {
+function storageAvailable(type: keyof Window) {
   try {
     var storage = window[type],
       x = '__storage_test__';
@@ -13,8 +13,14 @@ function storageAvailable(type) {
 }
 var hasLocalStorage = storageAvailable('localStorage');
 
+interface HTMLInputElement {
+  createTextRange?(): Range;
+}
+interface Range {
+  select?(): void;
+}
 // USER INTERFACE
-function moveCaretToEnd(el) {
+function moveCaretToEnd(el: HTMLInputElement) {
   if (typeof el.selectionStart == "number") {
     el.selectionStart = el.selectionEnd = el.value.length;
   } else if (typeof el.createTextRange != "undefined") {
@@ -33,10 +39,10 @@ $('#input').blur(function() {
 });
 // IMPLEMENT COMMAND HISTORY WITH UP AND DOWN ARROWS		
 var commandHistory = function() {
-  var history = [];
+  var history: string[] = [];
   var localHistory = [''];
   var index = 0;
-  var add = function add(command) {
+  var add = function add(command: string) {
     // don't add duplicates, don't add blanks		
     if (command.length && (!history.length || history[history.length - 1] !== command)) {
       history.push(command);
@@ -45,7 +51,7 @@ var commandHistory = function() {
     localHistory = history.slice();
     localHistory.push('');
   };
-  var arrow = function arrow(up, command) {
+  var arrow = function arrow(up: boolean, command: string) {
     localHistory[index] = command;
     if (up) {
       index = Math.max(index - 1, 0);
@@ -63,15 +69,15 @@ var KEYCODE_UP = 38;
 var KEYCODE_DOWN = 40;
 $('#input').keydown(function(e) {
   if (e.which == KEYCODE_UP || e.which == KEYCODE_DOWN) {
-    var inputText = $('#input').val();
+    var inputText = $('#input').val() as string;
     var selectedCommand = commandHistory.arrow(e.which == KEYCODE_UP, inputText);
     $('#input').val(selectedCommand);
-    moveCaretToEnd($('#input').get(0));
+    moveCaretToEnd($('#input').get(0) as HTMLInputElement);
     e.preventDefault();
   }
 });
 
-function output(str: string, classNames ? : string) {
+function output(str: string, classNames?: string) {
   classNames = classNames || 'output-text';
   $('#output').queue(function(next) {
     //console.log(str);
@@ -83,8 +89,8 @@ function output(str: string, classNames ? : string) {
     o.append(outputSpan);
     var millisPerWindow = 500;
     var pixelsPerMilli = $(window).height() / millisPerWindow;
-    var start = null;
-    var step = function step(time) {
+    var start: number = null;
+    var step = function step(time: number) {
       if (!start) start = time;
       var top = startTop + pixelsPerMilli * (time - start);
       o.scrollTop(top);
@@ -98,9 +104,9 @@ function output(str: string, classNames ? : string) {
   });
 }
 
-function processInput(ioFunction) {
+function processInput(ioFunction: (i: string) => string) {
   try {
-    var inputText = $('#input').val();
+    var inputText = $('#input').val() as string;
     commandHistory.add(inputText);
     $('#input').val('');
     output('>>\xA0' + inputText, 'input-text');
@@ -112,7 +118,7 @@ function processInput(ioFunction) {
   }
 }
 
-function durationString(millis) {
+function durationString(millis: number) {
   if (millis < 0) return null;
   var units = ['millisecond', 'second', 'minute', 'hour', 'day', 'week'];
   var divisors = [1000, 60, 60, 24, 7, 3];
@@ -127,7 +133,7 @@ function durationString(millis) {
   return null;
 };
 
-function dateString(millis) {
+function dateString(millis: number) {
   var date = new Date(millis);
   if (Intl && Intl.DateTimeFormat) {
     return (new Intl.DateTimeFormat('en-US', {
@@ -225,7 +231,7 @@ namespace Adventure {
     read(item: Item): void;
   }
   export interface Item {
-    beReadBy ? (subject: Person) : void;
+    beReadBy?(subject: Person): void;
   }
 }
 
@@ -241,7 +247,7 @@ namespace Adventure {
     eat(item: Item): void;
   }
   export interface Item {
-    beEatenBy ? (subject: Person) : void;
+    beEatenBy?(subject: Person): void;
   }
 }
 
@@ -254,10 +260,10 @@ adventure.newCommand({
 });
 namespace Adventure {
   export interface Person {
-    open(item: Item, instrument ? : Item): void;
+    open(item: Item, instrument?: Item): void;
   }
   export interface Item {
-    beOpenedBy ? (subject: Person, instrument ? : Item) : void;
+    beOpenedBy?(subject: Person, instrument?: Item): void;
   }
 }
 
@@ -273,7 +279,7 @@ namespace Adventure {
     close(item: Item): void;
   }
   export interface Item {
-    beClosedBy ? (subject: Person) : void;
+    beClosedBy?(subject: Person): void;
   }
 }
 
@@ -286,10 +292,10 @@ adventure.newCommand({
 });
 namespace Adventure {
   export interface Person {
-    unlock(item: Item, instrument ? : Item): void;
+    unlock(item: Item, instrument?: Item): void;
   }
   export interface Item {
-    beUnlockedBy ? (subject: Person, instrument ? : Item) : void;
+    beUnlockedBy?(subject: Person, instrument?: Item): void;
   }
 }
 
@@ -302,10 +308,10 @@ adventure.newCommand({
 });
 namespace Adventure {
   export interface Person {
-    lock(item: Item, instrument ? : Item): void;
+    lock(item: Item, instrument?: Item): void;
   }
   export interface Item {
-    beLockedBy ? (subject: Person, instrument ? : Item) : void;
+    beLockedBy?(subject: Person, instrument?: Item): void;
   }
 }
 
@@ -321,7 +327,7 @@ namespace Adventure {
     move(item: Item): void;
   }
   export interface Item {
-    beMovedBy ? (subject: Person) : void;
+    beMovedBy?(subject: Person): void;
   }
 }
 
@@ -338,7 +344,7 @@ namespace Adventure {
     push(item: Item): void;
   }
   export interface Item {
-    bePushedBy ? (subject: Person) : void;
+    bePushedBy?(subject: Person): void;
   }
 }
 
@@ -354,7 +360,7 @@ namespace Adventure {
     pull(item: Item): void;
   }
   export interface Item {
-    bePulledBy ? (subject: Person) : void;
+    bePulledBy?(subject: Person): void;
   }
 }
 var give = adventure.getCommand('give');
@@ -367,7 +373,7 @@ adventure.newCommand({
 });
 namespace Adventure {
   export interface Person {
-    putInto(item: Item, recipient ? : Item): void;
+    putInto(item: Item, recipient?: Item): void;
   }
 }
 var started = false;
@@ -378,20 +384,20 @@ var you = adventure.newPerson({
   keywords: ['adventurer', 'ms adventurer'],
   pronoun: 'she'
 }, {
-  start: function() {
-    var ret = "";
-    if (started) {
-      ret += "Okay, restarting the game from the beginning...\n\n";
-      adventure.deserialize(initialState);
+    start: function() {
+      var ret = "";
+      if (started) {
+        ret += "Okay, restarting the game from the beginning...\n\n";
+        adventure.deserialize(initialState);
+      }
+      started = true;
+      ret +=
+        "You have walked into a humongous house.  As you walk into a room, the door slams shut behind you and is now gone." +
+        "  Welcome to the game.\n";
+      you.learn(ret);
+      you.look();
     }
-    started = true;
-    ret +=
-      "You have walked into a humongous house.  As you walk into a room, the door slams shut behind you and is now gone." +
-      "  Welcome to the game.\n";
-    you.learn(ret);
-    you.look();
-  }
-});
+  });
 
 // PLACES
 var room = adventure.newPlace({
@@ -402,14 +408,14 @@ var room = adventure.newPlace({
 var closet = adventure.newPlace({
   id: 'closet',
   description: 'You are standing inside of a closet. It is dim in here.  There is a heavy ' +
-    'boulder up against the eastern wall.'
+  'boulder up against the eastern wall.'
 });
 
 var tunnel = adventure.newPlace({
   name: "underground tunnel",
   id: "tunnel",
   description: 'You find yourself in an underground tunnel that you can stand in and walk. ' +
-    'The walls of the tunnel are made out of stone.',
+  'The walls of the tunnel are made out of stone.',
   keywords: ["tunnel", "underground tunnel"]
 
 });
@@ -533,7 +539,7 @@ var soup = adventure.newItem({
     }
     this.closed = false;
     tell(subject, "You successfully use " + instrumentName + " to open the can of soup.",
-      function(witness) {
+      function(witness: Adventure.Person) {
         return A.capitalize(witness.nameFor(subject)) + ' ' + subject.verb('open') + ' ' + witness.nameFor(soup) +
           ' with ' +
           witness.nameFor(instrument) + '.';
@@ -578,9 +584,9 @@ var soup = adventure.newItem({
     }
     if (this.full) {
       this.full = false;
-      tell(subject, "You eat the soup.  Yum, tasty room-temperature soup!", function(witness) {
+      tell(subject, "You eat the soup.  Yum, tasty room-temperature soup!", function(witness: Adventure.Person) {
         return A.capitalize(witness.nameFor(subject)) + ' ' + subject.verb('eat') + ' ' + witness.nameFor(
-            soup) +
+          soup) +
           '.';
       });
       return;
@@ -590,9 +596,9 @@ var soup = adventure.newItem({
   },
   location: closet
 }, {
-  closed: true,
-  full: true,
-});
+    closed: true,
+    full: true,
+  });
 
 var note = adventure.newItem({
   'id': 'note',
@@ -633,7 +639,7 @@ var bed = adventure.newItem({
   canBeTaken: false,
   beUsedBy: function(subject) {
     tell(subject, "You lie down on the bed and fall asleep for a few minutes.  You wake up feeling refreshed.",
-      function(witness) {
+      function(witness: Adventure.Person) {
         return A.capitalize(witness.nameFor(subject)) + ' ' + subject.verb('lie') + ' down on the bed and ' +
           subject.verb(
             'sleep') + ' for a few minutes and then ' + subject.verb('get') + ' up.';
@@ -678,7 +684,7 @@ var teddyBear = adventure.newItem({
   location: bedroom
 });
 
-var key = key = adventure.newItem({
+var key = adventure.newItem({
   id: 'key',
   keywords: ['key'],
   beUsedBy: function(subject, object) {
@@ -704,14 +710,14 @@ var key = key = adventure.newItem({
   location: teddyBear
 });
 
-var cabinetBeOpenedBy = function(subject: Adventure.Person, instrument ? : Adventure.Item) {
+var cabinetBeOpenedBy = function(subject: Adventure.Person, instrument?: Adventure.Item) {
   if (!cabinet.closed) {
     tell(subject, "The cabinet is already open.");
     return;
   }
   if (!cabinet.locked) {
     cabinet.closed = false;
-    cabinet.allContents().forEach(function(it) {
+    cabinet.allContents().forEach(function(it: Adventure.Item) {
       it.hidden = false;
     });
     tell(subject, "You open the cabinet.");
@@ -732,11 +738,11 @@ var cabinetBeOpenedBy = function(subject: Adventure.Person, instrument ? : Adven
   }
   cabinet.locked = false;
   cabinet.closed = false;
-  cabinet.allContents().forEach(function(it) {
+  cabinet.allContents().forEach(function(it: Adventure.Item) {
     it.hidden = false;
   });
   tell(subject, "You turn the key in the cabinet's lock until you hear a click.  The cabinet springs open!",
-    function(witness) {
+    function(witness: Adventure.Person) {
       return A.capitalize(witness.nameFor(subject)) + ' ' + subject.verb('open') + ' the cabinet with ' +
         witness.nameFor(
           key) + '.';
@@ -744,7 +750,7 @@ var cabinetBeOpenedBy = function(subject: Adventure.Person, instrument ? : Adven
   return;
 };
 
-var cabinet = cabinet = adventure.newItem({
+var cabinet: Adventure.Item & { closed: boolean; locked: boolean; } = adventure.newItem({
   id: 'cabinet',
   keywords: ['cabinet'],
   canBeTaken: false,
@@ -754,7 +760,7 @@ var cabinet = cabinet = adventure.newItem({
       ret += ' It is closed and ' + (cabinet.locked ? '' : 'un') + 'locked.';
     } else {
       ret += ' It is open ';
-      var items = cabinet.listContents(subject).map(function(it) {
+      var items = cabinet.listContents(subject).map(function(it: Adventure.Item) {
         return subject.nameFor(it, it.indefiniteName, 'you');
       });
       if (items.length == 0) {
@@ -774,10 +780,10 @@ var cabinet = cabinet = adventure.newItem({
       return;
     }
     cabinet.closed = true;
-    cabinet.allContents().forEach(function(it) {
+    cabinet.allContents().forEach(function(it: Adventure.Item) {
       it.hidden = true;
     });
-    tell(subject, "You have closed the cabinet.", function(witness) {
+    tell(subject, "You have closed the cabinet.", function(witness: Adventure.Person) {
       return A.capitalize(witness.nameFor(subject)) + ' ' + subject.verb('has') +
         ' closed the cabinet.';
     });
@@ -785,9 +791,9 @@ var cabinet = cabinet = adventure.newItem({
   },
   beAskedToTake: function(item, subject, doTell) {
     if (!cabinet.closed) {
-      var info = function(witness) {
+      var info = function(witness: Adventure.Person) {
         return A.capitalize(witness.nameFor(subject)) + ' ' + subject.verb('has') + ' put ' + witness.nameFor(
-            item) +
+          item) +
           ' into the cabinet.';
       };
       if (doTell) tell(subject, info, info);
@@ -805,9 +811,9 @@ var cabinet = cabinet = adventure.newItem({
   },
   location: bedroom
 }, {
-  closed: true,
-  locked: true
-});
+    closed: true,
+    locked: true
+  });
 
 var diary = adventure.newItem({
   id: 'diary',
@@ -841,7 +847,7 @@ var boulderBeMovedBy = function(subject: Adventure.Person) {
       "Why did you do this again?\n\nAnnoyed with yourself, you step back from the boulder and stand " +
       "up again... to see that the boulder had been blocking a large hole in the eastern wall, which is now " +
       "revealed!",
-      function(witness) {
+      function(witness: Adventure.Person) {
         witness.setKnown(holeInTheWall);
         return A.capitalize(witness.nameFor(subject)) + ' ' + subject.verb('push') +
           ' the boulder along the wall, revealing a large hole leading east.';
@@ -858,14 +864,14 @@ var boulder = adventure.newItem({
   unlisted: true,
   canBeTaken: false,
   description: "This boulder is much too heavy for you to pick up.  " +
-    "You might be able to move it a little, but that's about it.",
+  "You might be able to move it a little, but that's about it.",
   beMovedBy: boulderBeMovedBy,
   bePushedBy: boulderBeMovedBy,
   bePulledBy: boulderBeMovedBy,
   location: closet
 }, {
-  budged: false
-});
+    budged: false
+  });
 
 // okay let's do something
 var batman = adventure.newPerson({
@@ -887,7 +893,7 @@ var cage = adventure.newItem({
     if (!this.closed) {
 
       if (doTell) {
-        var info = function(witness) {
+        var info = function(witness: Adventure.Person) {
           return A.capitalize(witness.nameFor(subject)) + ' ' + subject.verb('have') + ' put ' + witness.nameFor(
             item) + ' into ' + witness.nameFor(cage) + '.';
         };
@@ -906,8 +912,8 @@ var cage = adventure.newItem({
     return false;
   }
 }, {
-  closed: true
-});
+    closed: true
+  });
 
 // item? or person?
 var cat = adventure.newItem({

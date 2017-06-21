@@ -361,8 +361,9 @@ namespace Adventure {
       // newCommands
 
       for (var commandName in Person) {
-        if (commandName.startsWith('newCommand')) {
-          a.newCommand(Person[commandName]);
+        if (commandName.startsWith('newCommand')) {          
+          var commandOptions: any = Person[commandName as keyof typeof Person];
+          a.newCommand(commandOptions as CommandOptions);
         }
       }
 

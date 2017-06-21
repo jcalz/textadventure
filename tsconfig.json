@@ -8,7 +8,7 @@
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
     "declaration": true,
-    "noImplicitAny": false, // for now
+    "noImplicitAny": true,
     "suppressImplicitAnyIndexErrors": false,
     "strictNullChecks": false,
     "outDir": "lib",
