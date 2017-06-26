@@ -14,10 +14,7 @@ function storageAvailable(type: keyof Window) {
 var hasLocalStorage = storageAvailable('localStorage');
 
 interface HTMLInputElement {
-  createTextRange?(): Range;
-}
-interface Range {
-  select?(): void;
+  createTextRange?(): Range & { select(): void };
 }
 // USER INTERFACE
 function moveCaretToEnd(el: HTMLInputElement) {
@@ -78,10 +75,10 @@ $('#input').keydown(function(e) {
 });
 
 function output(str: string, classNames?: string) {
-  classNames = classNames || 'output-text';
+  var definedClassNames = classNames || 'output-text';
   $('#output').queue(function(next) {
     //console.log(str);
-    var outputSpan = $('<span>').addClass(classNames);
+    var outputSpan = $('<span>').addClass(definedClassNames);
     outputSpan.text(str + '\n');
     var o = $('#output');
     o.scrollTop(o.get(0).scrollHeight);
@@ -89,7 +86,7 @@ function output(str: string, classNames?: string) {
     o.append(outputSpan);
     var millisPerWindow = 500;
     var pixelsPerMilli = $(window).height() / millisPerWindow;
-    var start: number = null;
+    var start: number | null = null;
     var step = function step(time: number) {
       if (!start) start = time;
       var top = startTop + pixelsPerMilli * (time - start);
@@ -168,7 +165,7 @@ $(function() {
     output(
       '\n--------------------------------------PREVIOUS GAME AVAILABLE!--------------------------------------',
       'alert-text');
-    var timestamp = parseInt(localStorage.getItem(autosaveKey + '-time'), 10);
+    var timestamp = parseInt(localStorage.getItem(autosaveKey + '-time') || '0', 10);
     var ds = durationString(Date.now() - timestamp);
     var when = (timestamp) ? ((ds) ? (ds + ' ago') : ('on ' + dateString(timestamp))) : '';
     output('It looks like you left a game in progress ' + when + '.\n');
@@ -363,7 +360,8 @@ namespace Adventure {
     bePulledBy?(subject: Person): void;
   }
 }
-var give = adventure.getCommand('give');
+const give = adventure.getCommand('give');
+if (!give) throw new Error('expect adventure to have give commmand');
 adventure.newCommand({
   methodName: "putInto",
   templates: ["put|place %i1 into|in|inside|on|onto %i2"],
@@ -928,4 +926,4 @@ var collar = adventure.newItem({
 });
 
 var initialState = adventure.serialize();
-var previouslySavedState = hasLocalStorage && localStorage.getItem(autosaveKey);
+const previouslySavedState = hasLocalStorage && localStorage.getItem(autosaveKey);

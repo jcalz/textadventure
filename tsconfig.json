@@ -10,7 +10,7 @@
     "declaration": true,
     "noImplicitAny": true,
     "suppressImplicitAnyIndexErrors": false,
-    "strictNullChecks": false,
+    "strictNullChecks": true,
     "outDir": "lib",
     "lib": [
       "dom",

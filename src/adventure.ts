@@ -1,26 +1,26 @@
-interface Array < T > {
-  filter < U extends T > (pred: (a: T) => a is U): U[];
+interface Array<T> {
+  filter<U extends T>(pred: (a: T) => a is U): U[];
 }
 
 interface ObjectConstructor {
-  keys < T > (obj: T): (keyof T)[]
+  keys<T>(obj: T): (keyof T)[]
 }
 
-type ImplicitAnyIndex < T > = T & {
+type ImplicitAnyIndex<T> = T & {
   [k: string]: any
 };
 
 namespace Adventure {
 
-  type Dictionary < T > = {
+  type Dictionary<T> = {
     [k: string]: T
   }
 
-  type SetOfStrings = Dictionary < true > ;
+  type SetOfStrings = Dictionary<true>;
 
   type Info = string | ((p: Person) => string);
 
-  var objectValues = function < T > (o: Dictionary < T > , includeProto ? : boolean): T[] {
+  var objectValues = function <T>(o: Dictionary<T>, includeProto?: boolean): T[] {
     if (includeProto) {
       var ret: T[] = [];
       var k;
@@ -34,6 +34,14 @@ namespace Adventure {
     });
   };
 
+  function defined<T>(x: T | null | undefined): x is T {
+    return x!==null && (typeof x !== 'undefined');
+  }
+  function toDefined<T, U extends T>(x: T | null | undefined, defaultX: U): T {
+    return defined(x) ? x : defaultX;
+  }
+
+
   // string/grammar manipulation functions    
   export function capitalize(str: string): string {
     return str.charAt(0).toUpperCase() + str.slice(1);
@@ -43,7 +51,7 @@ namespace Adventure {
     return str.toLowerCase().split(" ").map(capitalize).join(" ");
   }
 
-  export function series(strs: string[], conjunction ? : string): string {
+  export function series(strs: string[], conjunction?: string): string {
     conjunction = conjunction || 'and';
     if (strs.length < 3) return strs.join(' ' + conjunction + ' ');
     return strs.slice(0, -1).join(', ') + ', ' + conjunction + ' ' + strs[strs.length - 1];
@@ -60,7 +68,7 @@ namespace Adventure {
   }
 
   // mutability for options
-  class MutabilityMarker < T > {
+  class MutabilityMarker<T> {
     mutable: boolean;
     object: T
 
@@ -71,15 +79,18 @@ namespace Adventure {
 
   }
 
-  type MaybeMarked < T > = T | MutabilityMarker < T > ;
+  type MaybeMarked<T> = T | MutabilityMarker<T>;
 
-  type MaybePropertiesMarked < T > = {
-    [P in keyof T]: MaybeMarked < T[P] > ;
+  type MaybePropertiesMarked<T> = {
+    [P in keyof T]: MaybeMarked<T[P]>;
   }
 
-  type PartialMarkedOptions < T > = Partial < MaybePropertiesMarked < T >> ;
+  type PartialMarkedOptions<T> = MaybePropertiesMarked<Partial<T>>;
 
-  export function mutable < T > (obj: MaybeMarked < T > , enforceIfWrapped ? : boolean): MutabilityMarker < T > {
+  export function mutable<T>(obj: undefined, enforceIfWrapped?: boolean): MutabilityMarker<undefined>;
+  export function mutable<T>(obj: MaybeMarked<T>, enforceIfWrapped?: boolean): MutabilityMarker<T>;
+  export function mutable<T>(obj: MaybeMarked<T> | undefined, enforceIfWrapped?: boolean): MutabilityMarker<T> | MutabilityMarker<undefined>;
+  export function mutable(obj: any, enforceIfWrapped?: boolean) {
     if (obj instanceof MutabilityMarker) {
       if (!enforceIfWrapped) return obj;
       obj = obj.object;
@@ -87,7 +98,10 @@ namespace Adventure {
     return new MutabilityMarker(true, obj);
   }
 
-  export function immutable < T > (obj: MaybeMarked < T > , enforceIfWrapped ? : boolean): MutabilityMarker < T > {
+ export function immutable<T>(obj: undefined, enforceIfWrapped?: boolean): MutabilityMarker<undefined>;
+  export function immutable<T>(obj: MaybeMarked<T>, enforceIfWrapped?: boolean): MutabilityMarker<T>;
+  export function immutable<T>(obj: MaybeMarked<T> | undefined, enforceIfWrapped?: boolean): MutabilityMarker<T> | MutabilityMarker<undefined>;
+  export function immutable(obj: any, enforceIfWrapped?: boolean) {
     if (obj instanceof MutabilityMarker) {
       if (!enforceIfWrapped) return obj;
       obj = obj.object;
@@ -95,15 +109,18 @@ namespace Adventure {
     return new MutabilityMarker(false, obj);
   }
 
-  function unwrap < T > (obj: MaybeMarked < T > ): T {
+function unwrap(obj: undefined): undefined;
+function unwrap<T>(obj: MaybeMarked<T>): T;
+function unwrap<T>(obj: MaybeMarked<T> | undefined): T | undefined;
+function unwrap(obj: any) {
     if (obj instanceof MutabilityMarker)
       return obj.object;
     return obj;
   }
 
-  function setOptions < T > (item: T & {
+  function setOptions<T>(item: T & {
     getImmutableProperties: () => SetOfStrings
-  }, options: PartialMarkedOptions < T > ) {
+  }, options: PartialMarkedOptions<T>) {
     var immutableProperties = item.getImmutableProperties();
     Object.keys(options).forEach(function(prop) {
       var v = options[prop];
@@ -119,7 +136,7 @@ namespace Adventure {
     });
   }
 
-  function enforceImmutables < T > (item: T & {
+  function enforceImmutables<T>(item: T & {
     getImmutableProperties: () => SetOfStrings
   }) {
     Object.keys(item.getImmutableProperties()).forEach(function(prop) {
@@ -151,18 +168,18 @@ namespace Adventure {
   }
   type BaseDirOpts = ({
     id: string,
-    name ? : string
+    name?: string
   } | {
-    id ? : string,
-    name: string
-  }) & {
-    keywords ? : string[]
-  };
+      id?: string,
+      name: string
+    }) & {
+      keywords?: string[]
+    };
   type DirectionOptions = BaseDirOpts & {
-    opposite ? : BaseDirOpts
+    opposite?: BaseDirOpts
   };
 
-  interface GrammaticalPersonMapping < T > {
+  interface GrammaticalPersonMapping<T> {
     i: T;
     we: T;
     you: T;
@@ -172,7 +189,7 @@ namespace Adventure {
     they: T;
   }
 
-  function grammarize < T > (itemOrPronoun: Item | string, mapping: GrammaticalPersonMapping < T > ): T {
+  function grammarize<T>(itemOrPronoun: Item | string, mapping: GrammaticalPersonMapping<T>): T {
     if (typeof itemOrPronoun !== 'string') {
       itemOrPronoun = itemOrPronoun.pronoun;
     }
@@ -180,7 +197,7 @@ namespace Adventure {
     var index: number;
     if (!(pronoun in mapping))
       pronoun = 'it';
-    return mapping[pronoun as keyof GrammaticalPersonMapping < T > ];
+    return mapping[pronoun as keyof GrammaticalPersonMapping<T>];
   }
 
   function isPlural(pronoun: string) {
@@ -214,7 +231,7 @@ namespace Adventure {
         'a ') + name
     };
   };
-  var addMethodFactory = function < T > (typeName: string, constructor: {
+  var addMethodFactory = function <T>(typeName: string, constructor: {
     new(...args: any[]): T
   }): (name: string, method: (this: T, ...args: any[]) => any) => void {
     return function(name: string, method: (this: T, ...args: any[]) => any) {
@@ -226,19 +243,19 @@ namespace Adventure {
 
   export class Adventure {
 
-    you: Person;
+    you: Person | undefined;
 
     maxNesting = 256;
 
     // KEEP A MAP OF ALL DIRECTIONS IN THE ADVENTURE
-    directions: Dictionary < Direction > = {};
+    directions: Dictionary<Direction> = {};
 
     directionName(dir: string) {
       if (dir in this.directions) return this.directions[dir].name;
       return dir;
     }
 
-    directionRegExps(dir: string, keywords ? : string[]): DirectionRegExps {
+    directionRegExps(dir: string, keywords?: string[]): DirectionRegExps {
       if (dir in this.directions) return this.directions[dir].regExps;
       keywords = keywords || [dir];
       var re = '(?:leading )?(?:on |to |toward )?(?:the |a |an )?(?:' + keywords.join('|') + ')';
@@ -249,9 +266,11 @@ namespace Adventure {
     }
 
     newDirection(options: DirectionOptions) {
-      if (!('name' in options) && (!('id' in options))) throw new Error('a direction needs a name');
-      if (!('name' in options)) options.name = options.id;
-      if (!('id' in options)) {
+      if (!options.name) {
+        if (!options.id) throw new Error('a direction needs a name');
+        options.name = options.id;
+      }
+      if (!options.id) {
         var i = 0;
         var id: string = options.name;
         while (id in options) {
@@ -268,7 +287,7 @@ namespace Adventure {
       direction.oppositeId = false;
       if (options.opposite) {
         var oppositeOptions = Object.assign({}, options.opposite);
-        delete(oppositeOptions as any).opposite; // don't need it but can't hurt
+        delete (oppositeOptions as any).opposite; // don't need it but can't hurt
         var opposite = this.newDirection(oppositeOptions);
         direction.oppositeId = opposite.id;
         opposite.oppositeId = direction.id;
@@ -281,7 +300,7 @@ namespace Adventure {
     constructor() {
       var a = this;
 
-      this.tell = function(personOrPeople: Person | Person[], infoPeople ? : Info, infoNearby ? : Info, infoDistant ?
+      this.tell = function(personOrPeople: Person | Person[], infoPeople?: Info, infoNearby?: Info, infoDistant?
         : Info) {
         var people: Person[] = (personOrPeople instanceof Item) ? [personOrPeople] : personOrPeople;
 
@@ -361,7 +380,7 @@ namespace Adventure {
       // newCommands
 
       for (var commandName in Person) {
-        if (commandName.startsWith('newCommand')) {          
+        if (commandName.startsWith('newCommand')) {
           var commandOptions: any = Person[commandName as keyof typeof Person];
           a.newCommand(commandOptions as CommandOptions);
         }
@@ -379,8 +398,8 @@ namespace Adventure {
           definiteName: 'an exit leading ' + directionName(k),
           keywords: ['exit', 'door'],
           direction: k,
-          location: null,
-          destination: null,
+          location: undefined,
+          destination: undefined,
           reverse: false,
           noExit: immutable(true),
           hidden: immutable(true)
@@ -390,7 +409,7 @@ namespace Adventure {
     }
 
     // KEEP A MAP OF ALL ITEMS IN THE ADVENTURE
-    itemMap: Dictionary < Item > = {};
+    itemMap: Dictionary<Item> = {};
 
     getNewId(id: string) {
       var cnt = 0;
@@ -410,7 +429,7 @@ namespace Adventure {
     };
 
     allPeople(): Person[] {
-      return this.allItems().filter < Person > (isPerson);
+      return this.allItems().filter<Person>(isPerson);
     }
 
     // KEEP A LIST OF ALL COMMANDS IN THE ADVENTURE
@@ -426,7 +445,7 @@ namespace Adventure {
     // 
 
     serialize() {
-      var serializedMap: Dictionary < string > = {};
+      var serializedMap: Dictionary<string> = {};
       var itemMap = this.itemMap;
       Object.keys(itemMap).forEach(function(k) {
         var serialized = itemMap[k].serialize();
@@ -451,7 +470,7 @@ namespace Adventure {
       });
     };
 
-    tell: (personOrPeople: Person | Person[], infoPeople ? : Info, infoNearby ? : Info, infoDistant ? : Info) => void;
+    tell: (personOrPeople: Person | Person[], infoPeople?: Info, infoNearby?: Info, infoDistant?: Info) => void;
 
     newCommand(options: CommandOptions): Command {
       var tell = this.tell;
@@ -464,16 +483,17 @@ namespace Adventure {
       if (typeof options.command == 'function') {
         commandFunction = options.command;
       } else if (typeof options.command == 'object') {
-        var youCant = options.command.youCant;
-        if (!youCant) {
+        var _youCant = options.command.youCant;
+        if (!_youCant) {
           var commandName = options.templates[0].toLowerCase().replace(/%[id]1?[^0-9]*$/, '').trim().replace(
             /%[id]\d+/, 'anything');
-          youCant = "You can't " + commandName + " %i1.";
+          _youCant = "You can't " + commandName + " %i1.";
         }
+        const youCant = _youCant
         var mustSee = ('mustSee' in options.command) ? !!options.command.mustSee : true; // default true
         var mustHave = !!options.command.mustHave; // default false
         var objectMethodName: string | false = options.command.objectMethodName || false;
-        commandFunction = function(object: ImplicitAnyIndex < Item > ) {
+        commandFunction = function(object: ImplicitAnyIndex<Item>) {
           var subject = this;
           var objectName = this.nameFor(object);
           if (object && mustHave && !this.has(object)) {
@@ -507,38 +527,38 @@ namespace Adventure {
       if (options.help) {
         command.help = options.help;
       }
-      (Person.prototype as ImplicitAnyIndex < Person > )[options.methodName] = command;
+      (Person.prototype as ImplicitAnyIndex<Person>)[options.methodName] = command;
       this.commands.push(command);
       return command; // why not
     };
 
-    newItem < T > (options: MaybePropertiesMarked < Partial < Item >> , extraOptions ? : MaybePropertiesMarked < T > ):
+    newItem<T>(options: PartialMarkedOptions<Item>, extraOptions?: MaybePropertiesMarked<T>):
       Item & T {
-        return new Item(this, Object.assign({}, options, extraOptions)) as Item & T;
-      };
+      return new Item(this, Object.assign({}, options, extraOptions)) as Item & T;
+    };
     addItemMethod = addMethodFactory('Item', Item);
 
-    newPlace < T > (options: MaybePropertiesMarked < Partial < Place >> , extraOptions ? : MaybePropertiesMarked < T > ):
+    newPlace<T>(options: PartialMarkedOptions<Place>, extraOptions?: MaybePropertiesMarked<T>):
       Place & T {
-        return new Place(this, Object.assign({}, options, extraOptions)) as Place & T;
-      };
+      return new Place(this, Object.assign({}, options, extraOptions)) as Place & T;
+    };
     addPlaceMethod = addMethodFactory('Place', Place);
 
-    newPerson < T > (options: MaybePropertiesMarked < Partial < Person >> , extraOptions ? : MaybePropertiesMarked < T >
+    newPerson<T>(options: PartialMarkedOptions<Person>, extraOptions?: MaybePropertiesMarked<T>
     ): Person & T {
       return new Person(this, Object.assign({}, options, extraOptions)) as Person & T;
     };
     addPersonMethod = addMethodFactory('Person', Person);
 
-    newExit < T > (options: MaybePropertiesMarked < Partial < Exit & {
-        reverse: string | false | MaybePropertiesMarked < Partial < Exit >>
-      } >> ,
-      extraOptions ? : MaybePropertiesMarked < T > ): Exit & T {
+    newExit<T>(options: PartialMarkedOptions<Exit & {
+      reverse: string | false | PartialMarkedOptions<Exit>
+    }>,
+      extraOptions?: MaybePropertiesMarked<T>): Exit & T {
       return new Exit(this, Object.assign({}, options, extraOptions)) as Exit & T;
     };
     addExitMethod = addMethodFactory('Exit', Exit);
 
-    noExit: Dictionary < Exit > = {};
+    noExit: Dictionary<Exit> = {};
 
     static blankResponses = ["What?", "Come again?", "Sorry, I didn't hear you.", "Did you say something?",
       "Are you confused?  Type \"help\" for help.", "I don't follow.", "You should probably type something.",
@@ -686,11 +706,11 @@ namespace Adventure {
       var commandMatches = this.getCommandMatches(subject, str);
 
       if (!commandMatches.length) return {
-        success: < false > false,
-        confusingInput: < string > str
+        success: <false>false,
+        confusingInput: <string>str
       };
 
-      var exits: Exit[] = null;
+      var exits: Exit[] | null = null;
       var noExit = this.noExit;
       var getExits = function() {
         if (!exits) {
@@ -701,7 +721,7 @@ namespace Adventure {
         }
         return exits;
       };
-      var items: Item[] = null;
+      var items: Item[] | null = null;
       var getItems = function() {
         if (!items) {
           items = subject.knownItems.slice();
@@ -709,7 +729,7 @@ namespace Adventure {
           items = items.filter(function(i) {
             return subject.canSee(i);
           }).
-          concat(items.filter(function(i) {
+            concat(items.filter(function(i) {
               return !subject.canSee(i);
             }),
             objectValues(noExit));
@@ -740,13 +760,13 @@ namespace Adventure {
           continue commandLoop;
         }
         return {
-          success: < true > true,
+          success: <true>true,
           func: commandMatch.command,
           parameters: params
         };
       }
       return {
-        success: < false > false,
+        success: <false>false,
         confusingInput: confusingInput
       };
     };
@@ -754,7 +774,7 @@ namespace Adventure {
 
   export class Item {
     getImmutableProperties: () => SetOfStrings;
-    location: Item;
+    location: Item | undefined;
     definiteName: string;
     indefiniteName: string;
     pluralName: string;
@@ -907,7 +927,7 @@ namespace Adventure {
     }
 
     name: string;
-    description ? : string;
+    description?: string;
     hidden: boolean;
     unlisted: boolean;
     playableCharacter: boolean;
@@ -916,15 +936,15 @@ namespace Adventure {
     alive: boolean;
     keywords: string[];
     wantsToTake: SetOfStrings;
-    wantsToGive: Dictionary < SetOfStrings > ;
+    wantsToGive: Dictionary<SetOfStrings>;
     informationQueue: string[];
     isItem: true;
     isPlace: boolean;
     isPerson: boolean;
     isExit: boolean;
 
-    constructor(public adventure: Adventure, options: string | Partial < MaybePropertiesMarked < Item >> ,
-      noEnforceImmutables ? : boolean) {
+    constructor(public adventure: Adventure, options: string | PartialMarkedOptions<Item>,
+      noEnforceImmutables?: boolean) {
 
       var item = this;
       if (typeof options === 'string') {
@@ -937,7 +957,8 @@ namespace Adventure {
       var name = unwrap(options.name) || unwrap(options.id) || 'item';
       options.name = immutable(options.name || name);
       var itemMap = this.adventure.itemMap;
-      if (options.id && unwrap(options.id) in itemMap) throw new Error('cannot reuse id "' + unwrap(options.id) +
+      var unwrappedId = unwrap(options.id);
+      if (defined(unwrappedId) && unwrappedId in itemMap) throw new Error('cannot reuse id "' + unwrap(options.id) +
         '"');
 
       var baseId = unwrap(options.id) || name || 'item';
@@ -955,27 +976,27 @@ namespace Adventure {
 
       var pronoun = unwrap(options.pronoun) || 'it';
       var defaultNames = getDefaultNames(name, pronoun);
-      options.description = immutable(options.description || null);
+      options.description = immutable(options.description || void 0);
       options.keywords = immutable(options.keywords || defaultNames.keywords);
       options.definiteName = immutable(options.definiteName || defaultNames.definiteName);
       options.indefiniteName = immutable(options.indefiniteName || defaultNames.indefiniteName);
       options.pluralName = immutable(options.pluralName || defaultNames.pluralName);
       options.pronoun = immutable(options.pronoun || pronoun);
-      options.canBeTaken = immutable('canBeTaken' in options ? options.canBeTaken : true);
-      options.location = (unwrap(options.canBeTaken) ? mutable : immutable)(options.location || null);
-      options.hidden = 'hidden' in options ? mutable(options.hidden) : mutable(false);
-      options.unlisted = immutable('unlisted' in options ? options.unlisted : false);
-      options.playableCharacter = immutable(('playableCharacter' in options) ? options.playableCharacter : false);
-      options.alive = immutable(('alive' in options) ? options.alive : false);
+      options.canBeTaken = immutable(toDefined(options.canBeTaken, true));
+      options.location = (unwrap(options.canBeTaken) ? mutable : immutable)(options.location || void 0);
+      options.hidden = mutable(toDefined(options.hidden, false));
+      options.unlisted = immutable(toDefined(options.unlisted, false));
+      options.playableCharacter = immutable(toDefined(options.playableCharacter,false));
+      options.alive = immutable(toDefined(options.alive, false));
       options.wantsToTake = mutable(options.wantsToTake || {});
       options.wantsToGive = mutable(options.wantsToGive || {});
 
       if (unwrap(options.playableCharacter)) options.informationQueue = mutable([] as string[]);
-      options.isItem = immutable < true > (true);
+      options.isItem = immutable<true>(true);
 
       setOptions(item, options);
 
-      var location: Item | string = this.location;
+      var location: Item | string | undefined = this.location;
 
       var o = {
         configurable: true,
@@ -983,7 +1004,7 @@ namespace Adventure {
         get: function() {
           var ret = location;
           if (typeof location === 'string') ret = itemMap[location];
-          if (!ret) ret = null;
+          if (!ret) ret = void 0;
           return ret;
         },
         set: function(l: Item) {
@@ -1050,7 +1071,7 @@ namespace Adventure {
 
       var locationChain = this.locationChain();
       for (var i = 0; i < locationChain.length; i++) {
-        var loc = locationChain[i];
+        var loc: Item | undefined = locationChain[i];
         if (subject === loc) continue; // you say yes to yourself
         if (!loc.beAskedToGive(this, subject, false)) {
           loc.beAskedToGive(this, subject, true);
@@ -1065,17 +1086,17 @@ namespace Adventure {
           "You have picked up " + subject.nameFor(item) + ".",
           function(witness: Person) {
             return capitalize(witness.nameFor(subject)) + ' ' + subject.have + ' picked up ' + witness.nameFor(
-                item) +
+              item) +
               '.';
           });
         success = true;
-      } else if (this.location.beAskedToGive(this, subject, true)) {
+      } else if (loc.beAskedToGive(this, subject, true)) {
         success = true;
       }
       if (success) {
         this.location = subject;
         delete subject.wantsToTake[this.id];
-        delete((loc || ({} as Person)).wantsToGive || {})[this.id];
+        delete ((loc || ({} as Person)).wantsToGive || {})[this.id];
       }
     };
 
@@ -1119,13 +1140,19 @@ namespace Adventure {
       if (recipient.beAskedToTake(this, subject, true)) {
         this.location = recipient;
         delete subject.wantsToGive[this.id];
-        delete(recipient.wantsToTake || {})[this.id];
+        delete (recipient.wantsToTake || {})[this.id];
       }
     };
 
     beDroppedBy(subject: Person) {
-      this.beGivenBy(subject, subject.location);
+      if (!subject.location) {
+        this.adventure.tell(subject, "You cannot drop anything when you are nowhere.");
+        return;
+      } 
+      this.beGivenBy(subject, subject.location);      
     }
+
+    
 
     beExaminedBy(subject: Person) {
       var item = this;
@@ -1146,7 +1173,7 @@ namespace Adventure {
       if (exits.length > 0) {
         var exitTypes: {
           [k: string]: {
-            single: string;multiple: string;directions: string[];
+            single: string; multiple: string; directions: string[];
           }
         } = {};
         exits.forEach(function(ex) {
@@ -1189,15 +1216,15 @@ namespace Adventure {
             ' here.';
         } else {
           ret += ' ' + subject.nameFor(item, capitalize(item.pronoun), 'You') + ' ' + ((item.alive) ?
-              subject.nameFor(item, item.have, 'have') : item.verb(
-                'contain')) +
+            subject.nameFor(item, item.have, 'have') : item.verb(
+              'contain')) +
             ' ' + series(itemNames) + '.';
         }
       }
       this.adventure.tell(subject, ret);
     };
 
-    public beUsedBy ? (person: Person, instrument ? : Item) : void;
+    public beUsedBy?(person: Person, instrument?: Item): void;
 
     allContents() {
       var here = this;
@@ -1220,7 +1247,7 @@ namespace Adventure {
       return items;
     };
 
-    ultimatelyContains(item: Item, excludingItself ? : boolean) {
+    ultimatelyContains(item: Item, excludingItself?: boolean) {
       var cnt = 0;
       for (var loc = (excludingItself ? item.location : item); loc; loc = loc.location) {
         cnt++;
@@ -1235,7 +1262,7 @@ namespace Adventure {
     locationChain() {
       var ids: SetOfStrings = {};
       var ret = [];
-      for (var loc: Item = this; loc && loc.id && (!(loc.id in ids)); loc = loc.location) {
+      for (var loc: Item | undefined = this; loc && loc.id && (!(loc.id in ids)); loc = loc.location) {
         ids[loc.id] = true;
         ret.push(loc);
       }
@@ -1291,7 +1318,7 @@ namespace Adventure {
         if (!superMethod) return superMethod;
         if (superMethod !== method) return superMethod.bind(this);
         proto = Object.getPrototypeOf(proto);
-        if (!proto) return void(0);
+        if (!proto) return void (0);
       }
     };
 
@@ -1332,7 +1359,7 @@ namespace Adventure {
         }
         return v;
       });
-      var item: ImplicitAnyIndex < this > = this;
+      var item: ImplicitAnyIndex<this> = this;
       Object.keys(stateObject).forEach(function(k) {
         if (!(k in item.getImmutableProperties())) {
           item[k] = stateObject[k];
@@ -1340,8 +1367,8 @@ namespace Adventure {
       });
     };
 
-    newBackgroundItem < T > (opts: MaybePropertiesMarked < Partial < Item >> , extraOptions ? : MaybePropertiesMarked <
-      T > ): Item & T {
+    newBackgroundItem<T>(opts: PartialMarkedOptions<Item>, extraOptions?: MaybePropertiesMarked<
+      T>): Item & T {
       var options = Object.assign({}, opts, extraOptions);
       if (!('unlisted' in options))
         options.unlisted = immutable(true);
@@ -1358,7 +1385,7 @@ namespace Adventure {
 
   export class Place extends Item {
 
-    constructor(adventure: Adventure, options: Partial < MaybePropertiesMarked < Place >> ) {
+    constructor(adventure: Adventure, options: PartialMarkedOptions<Place>) {
       if (typeof options === 'string') {
         options = {
           id: options
@@ -1409,7 +1436,7 @@ namespace Adventure {
 
     knownItems: Item[];
 
-    constructor(adventure: Adventure, options: Partial < MaybePropertiesMarked < Person >> ) {
+    constructor(adventure: Adventure, options: PartialMarkedOptions<Person>) {
       if (typeof options === 'string') {
         options = {
           id: options
@@ -1434,8 +1461,8 @@ namespace Adventure {
       options.isPerson = immutable(true);
       options.knownItems = [];
 
-      options.playableCharacter = immutable(('playableCharacter' in options) ? options.playableCharacter : true);
-      options.alive = immutable(('alive' in options) ? options.alive : true);
+      options.playableCharacter = immutable(toDefined(options.playableCharacter,  true));
+      options.alive = immutable(toDefined(options.alive, true));
       super(adventure, options, true);
 
       this.knownItems.push(this); // you know yourself
@@ -1443,9 +1470,9 @@ namespace Adventure {
       var person = this;
 
       ['name' as 'name',
-        'definiteName' as 'definiteName',
-        'indefiniteName' as 'indefiniteName',
-        'pronoun' as 'pronoun'
+      'definiteName' as 'definiteName',
+      'indefiniteName' as 'indefiniteName',
+      'pronoun' as 'pronoun'
       ].forEach(function(prop) {
 
         var p = person[prop];
@@ -1483,12 +1510,12 @@ namespace Adventure {
 
       if (doTell) {
         tell(asker, capitalize(
-            asker.nameFor(this, this.definiteName, "You")) + " won't let you take " + asker.nameFor(item) +
+          asker.nameFor(this, this.definiteName, "You")) + " won't let you take " + asker.nameFor(item) +
           ".");
         if (this !== asker)
           tell(this, function(askee) {
             return capitalize(askee.nameFor(asker)) + ' ' + asker.verb('try') + ' to take ' + askee.nameFor(
-                item) +
+              item) +
               ' from you, but you don\'t let ' + asker.them + '.';
           });
       }
@@ -1523,7 +1550,7 @@ namespace Adventure {
       return false;
     };
 
-    setKnown(object: Item, value ? : boolean) {
+    setKnown(object: Item, value?: boolean) {
       if (Array.isArray(object)) {
         var person = this;
         object.forEach(function(object) {
@@ -1564,12 +1591,12 @@ namespace Adventure {
         this.adventure.you = this;
         i = info(this);
       } finally {
-        this.adventure.you = null;
+        this.adventure.you = void 0;
       }
       if (i) this.informationQueue.push(i);
     };
 
-    nameFor(item: Item, name ? : string, youName ? : string) {
+    nameFor(item: Item, name?: string, youName?: string) {
       name = name || (this.isKnown(item) ? item.definiteName : item.indefiniteName);
       this.setKnown(item);
       if (this !== item) return name;
@@ -1588,32 +1615,36 @@ namespace Adventure {
         this.use(exit);
       }
     };
-    go(exit: Exit) {}
+    go(exit: Exit) { }
 
     private static newCommandClimb: CommandOptions = {
       methodName: "climb",
       templates: 'climb |%d1',
       command: function(dir: Exit) {
         if (!dir) {
-          var dir = this.location.getExits().find(function(ex: Exit) {
+          var dir = (this.location && this.location.getExits().find(function(ex: Exit) {
             return ex.direction == 'up';
-          }) || this.adventure.noExit['up']
+          })) || this.adventure.noExit['up']
         }
         this.go(dir);
       }
     };
-    climb(exit ? : Exit) {}
+    climb(exit?: Exit) { }
 
     private static newCommandLook: CommandOptions = {
       methodName: "look",
       templates: 'look|l',
       help: 'Look around you.',
       command: function look() {
-        this.setKnown(this.location);
-        this.location.beExaminedBy(this);
+        if (this.location) {
+          this.setKnown(this.location);
+          this.location.beExaminedBy(this);
+        } else {
+           this.adventure.tell(this, "You are apparently nowhere.");         
+        }
       }
     };
-    look() {}
+    look() { }
 
     private static newCommandTake: CommandOptions = {
       methodName: "take",
@@ -1623,7 +1654,7 @@ namespace Adventure {
         objectMethodName: "beTakenBy"
       }
     };
-    take(item: Item) {}
+    take(item: Item) { }
 
     private static newCommandDrop: CommandOptions = {
       methodName: "drop",
@@ -1634,7 +1665,7 @@ namespace Adventure {
         mustHave: true
       }
     };
-    drop(item: Item) {}
+    drop(item: Item) { }
 
     private static newCommandGive: CommandOptions = {
       methodName: "give",
@@ -1645,7 +1676,7 @@ namespace Adventure {
         mustHave: true
       }
     };
-    give(item: Item, recipient: Item) {}
+    give(item: Item, recipient: Item) { }
 
     private static newCommandInventory: CommandOptions = {
       methodName: "inventory",
@@ -1663,7 +1694,7 @@ namespace Adventure {
         this.adventure.tell(this, ret);
       }
     };
-    inventory() {}
+    inventory() { }
 
     private static newCommandHelp: CommandOptions = {
       methodName: "help",
@@ -1688,7 +1719,7 @@ namespace Adventure {
       templates: ['help|h', 'help me'],
       help: 'Read these words.'
     };
-    help() {}
+    help() { }
 
     private static newCommandExamine: CommandOptions = {
       methodName: "examine",
@@ -1698,7 +1729,7 @@ namespace Adventure {
         objectMethodName: "beExaminedBy"
       }
     };
-    examine(item: Item) {}
+    examine(item: Item) { }
 
     private static newCommandUse: CommandOptions = {
       methodName: "use",
@@ -1708,7 +1739,7 @@ namespace Adventure {
         objectMethodName: "beUsedBy"
       }
     };
-    use(item: Item) {}
+    use(item: Item) { }
 
   }
 
@@ -1716,7 +1747,7 @@ namespace Adventure {
     if (!templates.length) return [];
     var expandTemplate = function expandTemplate(t: string): SetOfStrings {
       t = t.replace(/\|+/g, '|').replace(/\s\|\s/g, '').replace(/[^a-z0-9|%\s]/gi, '').
-      replace(/([^\s|])%/g, '$1').replace(/%(?![id]\d*([\s|]|$))/gi, '').replace(/\s+/g, ' ').trim();
+        replace(/([^\s|])%/g, '$1').replace(/%(?![id]\d*([\s|]|$))/gi, '').replace(/\s+/g, ' ').trim();
       var b = t.indexOf('|');
       if (b < 0) {
         var ret: SetOfStrings = {};
@@ -1737,34 +1768,34 @@ namespace Adventure {
     methodName: string;
     templates: string[] | string;
     command: ((this: Person, ...args: any[]) => any) | {
-      youCant ? : string;
-      mustSee ? : boolean;
-      mustHave ? : boolean;
-      objectMethodName ? : string;
+      youCant?: string;
+      mustSee?: boolean;
+      mustHave?: boolean;
+      objectMethodName?: string;
     };
-    help ? : string;
+    help?: string;
   }
   interface Command {
     (this: Person, ...args: any[]): any;
     methodName: string;
-    help ? : string;
+    help?: string;
     templates: string[];
   }
 
   export class Exit extends Item {
-    direction: keyof Dictionary < Direction > ;
+    direction: keyof Dictionary<Direction>;
     forwardExit: Exit;
-    reverseExit ? : Exit;
-    isForwardExit ? : boolean;
-    isReverseExit ? : boolean;
-    otherWay ? : Exit;
+    reverseExit?: Exit;
+    isForwardExit?: boolean;
+    isReverseExit?: boolean;
+    otherWay?: Exit;
     destination: Place;
-    noExit ? : boolean;
+    noExit?: boolean;
 
     constructor(adventure: Adventure,
-      options: Partial < MaybePropertiesMarked < Exit & {
-        reverse: false | string | Partial < MaybePropertiesMarked < Exit >>
-      } >> ) {
+      options: PartialMarkedOptions<Exit & {
+        reverse: false | string | PartialMarkedOptions<Exit>
+      }>) {
 
       if (typeof options === 'string') {
         options = {
@@ -1807,28 +1838,27 @@ namespace Adventure {
 
         // TODO oppositeId may be false... if so, we should do something to 'oppositeId'
 
+        var dirName = unwrap(options.direction);
+        if (!dirName) throw new Error('need direction for exit');
+        var dir = adventure.directions[dirName];
         if (!reverse.direction) {
-          var dir = adventure.directions[unwrap(options.direction)];
           var oppositeId = dir ? dir.oppositeId : false;
           if (!oppositeId) throw new Error('need reverse direction for exit');
           reverse.direction = oppositeId;
         }
         reverse.direction = immutable(reverse.direction);
 
-        if (('id' in reverse) && (unwrap(reverse.id) in adventure.itemMap)) throw new Error('Cannot reuse id ' + unwrap(
-            reverse
-            .id) +
+        var unwrappedRevId = unwrap(reverse.id);
+        if (defined(unwrappedRevId) && (unwrappedRevId in adventure.itemMap)) throw new Error('Cannot reuse id ' + unwrappedRevId +
           ' for reverse.id');
 
         reverse.id = immutable(reverse.id || adventure.getNewId((unwrap(reverse.name) || name) + '-reverse'));
 
-        var reversePronoun = ('pronoun' in reverse) ? unwrap(reverse.pronoun) : (('pronoun' in options) ? unwrap(
-            options.pronoun) :
-          'it');
+        var reversePronoun = toDefined(unwrap(reverse.pronoun), toDefined(unwrap(options.pronoun), 'it'));
 
         if ('name' in reverse || 'pronoun' in reverse) {
-          reverse.name = immutable(reverse.name || name);
-          var defaultNames = getDefaultNames(unwrap(reverse.name), reversePronoun);
+          reverse.name = immutable(reverse.name || name);          
+          var defaultNames = getDefaultNames(toDefined(unwrap(reverse.name), name), reversePronoun);
           reverse.keywords = immutable(reverse.keywords || defaultNames.keywords);
           reverse.definiteName = immutable(reverse.definiteName || defaultNames.definiteName);
           reverse.indefiniteName = immutable(reverse.indefiniteName || defaultNames.indefiniteName);
@@ -1840,13 +1870,13 @@ namespace Adventure {
         (['description', 'keywords', 'definiteName', 'indefiniteName', 'pluralName', 'pronoun', 'canBeTaken',
           'hidden',
           'unlisted'
-        ] as['description', 'keywords', 'definiteName', 'indefiniteName', 'pluralName', 'pronoun', 'canBeTaken',
-          'hidden',
-          'unlisted'
-        ]).forEach(k => {
-          if (k in r) r[k] = immutable(r[k] as any); // explicit any type since type checker can't distribute 
-          // mutability marker across unions
-        });
+        ] as ['description', 'keywords', 'definiteName', 'indefiniteName', 'pluralName', 'pronoun', 'canBeTaken',
+            'hidden',
+            'unlisted'
+          ]).forEach(k => {
+            if (k in r) r[k] = immutable(r[k] as any); // explicit any type since type checker can't distribute 
+            // mutability marker across unions
+          });
 
         // unchangable options
         options.isForwardExit = immutable(true);
@@ -1874,9 +1904,9 @@ namespace Adventure {
         configurable: false,
         enumerable: true,
         get: function() {
-          var ret = destination as Place | string;
+          var ret = destination as Place | string | undefined;
           if (typeof ret === 'string') ret = adventure.itemMap[ret];
-          if (!ret) ret = null;
+          if (!ret) ret = void 0;
           return ret;
         }
       };
@@ -1938,7 +1968,7 @@ namespace Adventure {
           mergedKeyObj[k] = true;
         });
 
-        Object.keys(mergedKeyObj).forEach(function < K extends keyof Exit > (k: K) {
+        Object.keys(mergedKeyObj).forEach(function <K extends keyof Exit>(k: K) {
           if ((k == 'location') || (k == 'destination')) return;
           var get;
           var set;
@@ -1992,7 +2022,7 @@ namespace Adventure {
 
       var exit = this;
       tell(subject, ret, function(witness) {
-        return capitalize(subject.definiteName) + ' ' + subject.verb('leave') + ' ' + exit.location.definiteName +
+        return capitalize(subject.definiteName) + ' ' + subject.verb('leave') + ' ' + (exit.location ? exit.location.definiteName : 'nowhere') +
           ' through ' + exitName + '.';
       });
 
@@ -2001,7 +2031,7 @@ namespace Adventure {
       var otherWayName = this.otherWay ? ' through ' + this.otherWay.definiteName + (this.otherWay.direction ?
         ' leading ' + this.adventure.directionName(this.otherWay.direction) : '') : '';
 
-      tell(subject, null, function(witness) {
+      tell(subject, void 0, function(witness: Person) {
         return capitalize(subject.definiteName) + ' ' + subject.verb('enter') + ' ' + exit.destination.definiteName +
           otherWayName + '.';
       });
